@@ -10,9 +10,14 @@ PYTHON_VERSION = 2.3
 # adjust to point to python include path
 # can also be /usr/include/python$(PYTHON_VERSION)
 # look for Python.h in the specified path
-PYTHON_DIR = /usr/include/python$(PYTHON_VERSION)
-PYTHON_LIBDIR = /usr/lib/python$(PYTHON_VERSION)
-# put used Python modules from lib-dynload here, e.g. time, mysql etc.
+# Python prefix is what you configured python with 
+# if you built from source (e.g. ./configure --with-prefix=/usr/local)
+# on debian it's often /usr, on SuSE /usr/local
+PYTHON_PREFIX = /usr
+PYTHON_DIR = $(PYTHON_PREFIX)/include/python$(PYTHON_VERSION)
+PYTHON_LIBDIR = $(PYTHON_PREFIX)/lib/python$(PYTHON_VERSION)
+
+# put used Python modules from lib-dynload here, e.g. time, mysql, _cvs.so etc.
 PYTHON_DYNLOAD_MODULES = $(PYTHON_LIBDIR)/lib-dynload/time.so	
 PYTHON_module_cflags = -I$(PYTHON_DIR)
 PYTHON_module_ldflags = -L$(PYTHON_LIBDIR)/config -lpython$(PYTHON_VERSION) $(PYTHON_DYNLOAD_MODULES)
