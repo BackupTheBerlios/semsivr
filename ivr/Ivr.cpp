@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.9 2004/07/01 11:39:34 sayer Exp $
+ * $Id: Ivr.cpp,v 1.10 2004/07/01 12:03:22 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -199,8 +199,9 @@ void IvrDialog::onSessionStart(AmRequest* req){
 					mediaHandler->getRecordConnector());
    
   DBG("End duplex.\n");
-
-  ivrPython->unregisterForeignEventQueue();  // we don't want more events from the script
+  
+  mediaHandler->unregisterForeignEventQueue(); // we don't want more script events
+  ivrPython->unregisterForeignEventQueue();  // we don't want more media events from the script
 
 #ifdef IVR_PERL
   scriptEventP->stop();
