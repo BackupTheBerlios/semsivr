@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.6 2004/06/29 15:50:59 sayer Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.7 2004/07/01 16:18:38 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -49,7 +49,8 @@ void IvrMediaHandler::unregisterForeignEventQueue() {
 
 IvrMediaHandler::~IvrMediaHandler()
 {
-  //  DBG("Media Handler  being destroyed...\n");
+  DBG("Media Handler  being destroyed...\n");
+  emptyMediaQueue();
 }
 
 int IvrMediaHandler::enqueueMediaFile(string fileName, bool front) {
@@ -73,9 +74,14 @@ int IvrMediaHandler::enqueueMediaFile(string fileName, bool front) {
 }
 
 int IvrMediaHandler::emptyMediaQueue() {
-    playConnector.setActiveMedia(0);
-    mediaOutQueue.clear();
-    return 0;
+  playConnector.setActiveMedia(0); 
+  // we own all the MediaWrappers
+  for (std::deque<IvrMediaWrapper*>::iterator it = mediaOutQueue.begin(); 
+       it != mediaOutQueue.end(); it++) {
+    delete *it;
+  }
+  mediaOutQueue.clear();
+  return 0;
 }
 
 int IvrMediaHandler::startRecording(string& filename) {
@@ -111,19 +117,18 @@ int IvrMediaHandler::resumeDTMFDetection() {
 }
 
 void IvrMediaHandler::close(){
-		DBG("IvrMediaHandler::close(). closing record connector...\n");
-
-		recordConnector.close();
-		DBG("closing play connector...");
-		playConnector.close();
-		DBG("done.");
+  DBG("IvrMediaHandler::close(). closing record connector...\n");
+  recordConnector.close();
+  DBG("closing play connector...");
+  playConnector.close();
+  DBG("done.");
 //   detectionRunning = false;
 //    if (dtmfDetector) {
 //     delete dtmfDetector;
 //     dtmfDetector = 0;
 //   }
 		// *TODO: delete mediaIn? 
-		closed = true;
+  closed = true;
 }
 
 IvrAudioConnector* IvrMediaHandler::getPlayConnector() {
@@ -136,13 +141,17 @@ IvrAudioConnector* IvrMediaHandler::getRecordConnector() {
 
 // this is called by the out connector
 IvrMediaWrapper* IvrMediaHandler::getNewOutMedia() { 
-      if (mediaOutQueue.empty()) {
-	DBG("Empty queue.\n");
-	return 0; // return -1;
-    }
+  if (mediaOutQueue.empty()) {
+    DBG("Empty queue.\n");
+    return 0; // return -1;
+  }
   
+  if (!mediaOutQueue.empty()) {
+    delete mediaOutQueue.front();
     mediaOutQueue.pop_front();
-    if (mediaOutQueue.empty()) {
+  }
+
+  if (mediaOutQueue.empty()) {
 	DBG("Empty media queue after pop.\n");
 	if (scriptEventQueue) {
 	  DBG("Posting IvrScriptEvent::IVR_MediaQueueEmpty into scriptEventQueue.\n");
@@ -191,23 +200,41 @@ void IvrMediaWrapper::getSamples(unsigned char* dest, int count) {
 IvrAudioConnector::IvrAudioConnector(IvrMediaHandler* mh, bool isPlay) 
   : AmAudio(),  scriptEventQueue(0), mediaHandler(mh),
       isPlayConnector(isPlay), activeMedia(0),
-      detectionRunning(false), dtmfDetector(0), closed(false)
+    detectionRunning(false), dtmfDetector(0), closed(false),
+    myInternalFormat(new AmAudioSimpleFormat(IVR_AUDIO_CODEC))
 {
+    myInternalFormat->rate = IVR_AUDIO_RATE;
+    myInternalFormat->sample = IVR_AUDIO_SAMPLE;
+    myInternalFormat->channels = IVR_AUDIO_CHANNELS;
+
     setDefaultFormat();
 }
 
 IvrAudioConnector::~IvrAudioConnector() 
 {
-    if (dtmfDetector)
-	delete dtmfDetector;
+  close();
+  // we do not own the AmAudioFormat !
+  if (isPlayConnector) {
+    in.release();
+    delete myInternalFormat;
+  } else {
+    out.release(); // internal fmt of rec destroyed by close
+  }
+  
+  if (dtmfDetector)
+    delete dtmfDetector;
 }
 
 void IvrAudioConnector::close() {
-    //  if (activeMedia)
-    //     activeMedia->close();
+  if (!closed) {
+    if (mediaIn) { // recording file is ours
+      mediaIn->close();
+      delete mediaIn;
+      mediaIn = 0;
+    }
     closed = true;
+  }
 }
-
 void IvrAudioConnector::setScriptEventQueue(AmEventQueue* newScriptEventQueue) {
   scriptEventQueue = newScriptEventQueue;
   if (dtmfDetector)
@@ -216,16 +243,14 @@ void IvrAudioConnector::setScriptEventQueue(AmEventQueue* newScriptEventQueue) {
 
 
 void IvrAudioConnector::setDefaultFormat() {
-    AmAudioSimpleFormat* fmt = new AmAudioSimpleFormat(IVR_AUDIO_CODEC);
-    fmt->rate = IVR_AUDIO_RATE;
-    fmt->sample = IVR_AUDIO_SAMPLE;
-    fmt->channels = IVR_AUDIO_CHANNELS;
     if (isPlayConnector) {
       DBG("Setting in format of play connector to default format.\n");
-      in.reset(fmt);
+      in.release();
+      in.reset(myInternalFormat);
     } else {
       DBG("Setting out format of record connector to default format.\n");
-      out.reset(fmt);
+      out.release();
+      out.reset(myInternalFormat);
     }
 }
 
@@ -239,8 +264,10 @@ void IvrAudioConnector::setActiveMedia(IvrMediaWrapper* newMedia) {
 void IvrAudioConnector::refreshFormat() {
   if (activeMedia) {
     if (isPlayConnector) {
+      in.release(); // we don't own the fmt!
       in.reset(activeMedia->in.get());
     } else {
+      out.release(); // we don't own the fmt!
       out.reset(activeMedia->out.get());
     }
   } else {
@@ -259,7 +286,7 @@ int IvrAudioConnector::streamGet(unsigned int user_ts, unsigned int size) {
     return -1;
   
   if (!activeMedia) {
-    //				    DBG("no active mnedia\n");
+    //	 DBG("no active mnedia\n");
     return 0; // TODO: check if return 0 is correct
   }
   int ret = activeMedia->streamGetRaw(user_ts, size);

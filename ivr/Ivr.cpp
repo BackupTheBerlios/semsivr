@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.10 2004/07/01 12:03:22 sayer Exp $
+ * $Id: Ivr.cpp,v 1.11 2004/07/01 16:18:38 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -142,13 +142,14 @@ AmDialogState* IvrFactory::onInvite(AmCmd& cmd){
 
 #ifndef IVR_WITH_TTS
 IvrDialog::IvrDialog(string scriptFile)
+  : mediaHandler(0)
 #else
 IvrDialog::IvrDialog(string scriptFile, string tts_cache_path_, bool tts_caching_)
-				: tts_cache_path(tts_cache_path_), tts_caching(tts_caching_)
+				: mediaHandler(0), tts_cache_path(tts_cache_path_), 
+				  tts_caching(tts_caching_)
 #endif
 {
    pythonScriptFile = scriptFile;
-   mediaHandler = new IvrMediaHandler();
    ivrPython = new IvrPython();
    ivrPython->fileName = (char*)pythonScriptFile.c_str();
 
@@ -169,10 +170,11 @@ IvrDialog::~IvrDialog()
 // #endif
 
 //   ivrPython->setNoUnregisterScriptQueue();
-  delete mediaHandler;
 }
 
 void IvrDialog::onSessionStart(AmRequest* req){
+  mediaHandler = new IvrMediaHandler();
+
   ivrPython->pAmSession = getSession();
   ivrPython->pCmd = &(req->cmd);
    
@@ -221,13 +223,17 @@ void IvrDialog::onSessionStart(AmRequest* req){
   }
 
 #ifdef KILL_HANGING_INTERPRETER
-   if (!ivrPython->getStopped())
-     ivrPython->cancel();  // kill the interpreter thread if not stopped by itself
+  if (!ivrPython->getStopped())
+    ivrPython->cancel();  // kill the interpreter thread if not stopped by itself
 #endif
-
+  
+  IvrMediaHandler* _mh = mediaHandler;
+  mediaHandler = 0; 
+  delete _mh;
+  
   DBG("Handing over interpreter thread to ThreadWatcher.\n"); 
   AmThreadWatcher::instance()->add(ivrPython);
- 
+
   DBG("finished.\n");
 }
 
@@ -281,6 +287,10 @@ void IvrDialog::process(AmEvent* event) {
 
 int IvrDialog::handleMediaEvent(IvrMediaEvent* evt) {
   evt->processed = true; // we eat up all media events at the moment
+  if (!mediaHandler) {
+    ERROR("no MediaHandler to process event.\n");
+    return 1;
+  }
   switch (evt->event_id) {
   case IvrMediaEvent::IVR_enqueueMediaFile: {
     return mediaHandler->enqueueMediaFile(evt->MediaFile, evt->front);

@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.9 2004/06/30 10:39:35 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.10 2004/07/01 16:18:37 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -574,16 +574,17 @@ IvrPython::IvrPython()
 }
 
 IvrPython::~IvrPython() {
-  if (regScriptEventProducer) {
-    DBG("unregistering with script event producer\n");
-    regScriptEventProducer->unregisterForeignEventQueue();
-  }
+//   if (regScriptEventProducer) {
+//     DBG("unregistering with script event producer\n");
+//     regScriptEventProducer->unregisterForeignEventQueue();
+//   }
 }
 
 void IvrPython::registerWith(IvrEventProducer* scriptEventProducer) {
   scriptEventProducer->registerForeignEventQueue(scriptEventQueue.get());
   regScriptEventProducer = scriptEventProducer;
 }
+
 void IvrPython::setNoUnregisterScriptQueue() {
   regScriptEventProducer = 0;
 }

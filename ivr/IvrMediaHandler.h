@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.h,v 1.4 2004/06/29 15:50:59 sayer Exp $
+ * $Id: IvrMediaHandler.h,v 1.5 2004/07/01 16:18:38 sayer Exp $
  * Copyright (C) 2004 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -70,7 +70,8 @@ class IvrAudioConnector : public AmAudio {
   void setDefaultFormat();
 
   bool closed;
-    // for recording 
+  
+  // for recording 
   bool mediaInRunning;
   AmAudioFile* mediaIn;
 
@@ -79,6 +80,8 @@ class IvrAudioConnector : public AmAudio {
   IvrDtmfDetector* dtmfDetector;
   
   AmEventQueue* scriptEventQueue;
+
+  AmAudioFormat* myInternalFormat;
  protected:
   int streamGet(unsigned int user_ts, unsigned int size);
   int streamPut(unsigned int user_ts, unsigned int size);
