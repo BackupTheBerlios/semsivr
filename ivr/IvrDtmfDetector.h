@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.h,v 1.8 2004/07/14 23:01:19 zrichard Exp $
+ * $Id: IvrDtmfDetector.h,v 1.9 2004/07/16 17:35:06 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -21,15 +21,18 @@
 #ifndef IVR_DTMF_DETECTOR_H
 #define IVR_DTMF_DETECTOR_H
 
+#ifndef DTMF_STANDALONE_TEST
 #include "Ivr.h" 
 //#include "IvrMediaHandler.h" // for AmAudioIvrInFormat
-
-#include <stdio.h>
-
 class AmAudioIvrInFormat;
+#else
+#include <stdio.h>
+#endif
+
 // these are returned if the non number keys are pressed
 
 #define DTMF_NPOINTS    205        /* Number of samples for DTMF recognition */
+#define REL_DTMF_NPOINTS    205        /* Number of samples for DTMF recognition */
 #define SAMPLERATE     8000        
 #define PI          3.14159
 #define DTMF_INTERVAL     7
@@ -49,17 +52,30 @@ struct dtmf_state {
 class IvrDtmfDetector 
 {
  private:
+#ifndef DTMF_USE_RELATIVE_DETECTION
   void    isdn_audio_goertzel(int *sample, int* result);
   void    isdn_audio_eval_dtmf(int* result, dtmf_state *s);
-  void    isdn_audio_calc_dtmf(dtmf_state *s, pcm* buf, int len);
+#else // DTMF_USE_RELATIVE_DETECTION
+  void    isdn_audio_goertzel_relative(int *sample, int* result);
+  void    isdn_audio_eval_dtmf_relative(int* result, dtmf_state *s);
+#endif //DTMF_USE_RELATIVE_DETECTION
+
+  void    isdn_audio_calc_dtmf(dtmf_state *s, dtmf_state *s_rel,  pcm* buf, int len);
 
   dtmf_state state;
+  dtmf_state rel_state;
+#ifndef DTMF_STANDALONE_TEST
   AmEventQueue* destinationEventQueue;
+#endif
+
  public:
   IvrDtmfDetector();
   ~IvrDtmfDetector();
-  void setDestinationEventQueue(AmEventQueue* eventQueue);
   int streamPut(unsigned char* samples, unsigned int size, unsigned int user_ts);
+
+#ifndef DTMF_STANDALONE_TEST
+  void setDestinationEventQueue(AmEventQueue* eventQueue);
+#endif
 };
 
 #endif // IVR_DTMF_DETECTOR_H
