@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.cpp,v 1.9 2004/07/16 17:35:06 sayer Exp $
+ * $Id: IvrDtmfDetector.cpp,v 1.10 2004/07/25 22:00:33 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -123,6 +123,7 @@ dtmf_state::dtmf_state() {
   idx = 0;
   last = ' ';
   last_dtmf_sample=100;
+	rel_last = '.';
 }
 
 /*
@@ -282,7 +283,8 @@ IvrDtmfDetector::isdn_audio_eval_dtmf_relative(int* result, dtmf_state *s)
       printf("%8d %8d - ", result[i], 0);
     printf("\n");
 #endif
-
+		if (s->last_dtmf_sample)
+			s->last_dtmf_sample--;
     for (i = 0; i < REL_NCOEFF; i++) {
 	if (result[i] > REL_DTMF_TRESH) {
 	    if (result[i] > thresh)
@@ -341,18 +343,29 @@ IvrDtmfDetector::isdn_audio_eval_dtmf_relative(int* result, dtmf_state *s)
     }
     if ((!same_tone)&&(what != ' ') && (what != '.')) {
 #ifndef DTMF_STANDALONE_TEST
-      if (destinationEventQueue) {
-	DBG("Posting DTMF %d: %c (%d)\n",  s->last_dtmf_sample, what, IVR_what);
- 	destinationEventQueue->postEvent(new IvrScriptEvent(IvrScriptEvent::IVR_DTMF, IVR_what));
-      } else {
-	DBG("DTMF %d: %c (%d) [no script to notify]\n",  s->last_dtmf_sample, what, IVR_what);
-      }
-      s->last_dtmf_sample=0;
+			if ((what != s->rel_last)||(!s->last_dtmf_sample)) {
+
+				if (destinationEventQueue) {
+					DBG("Posting DTMF %d: %c (%d)\n",  s->last_dtmf_sample, what, IVR_what);
+					destinationEventQueue->postEvent(new IvrScriptEvent(IvrScriptEvent::IVR_DTMF, IVR_what));
+				} else {
+					DBG("DTMF %d: %c (%d) [no script to notify]\n",  s->last_dtmf_sample, what, IVR_what);
+				}
+				//ERROR("rel_last = %c, what = %c, last_dtmf = %d\n", s->rel_last, what, s->last_dtmf_sample);
+				s->last_dtmf_sample=DTMF_INTERVAL;
+				s->rel_last = what;
 #else
 	    printf("dtmf: tt='%c' (%d)\n", what, IVR_what);
 #endif
-
-
+			} else {
+#ifndef DTMF_STANDALONE_TEST
+				DBG("DTMF: false positive, %d too close, %c (%d)\n", 
+						s->last_dtmf_sample, what, IVR_what);
+#else 
+				printf("DTMF: false positive, %d too close, %c (%d)\n", 
+							 s->last_dtmf_sample, what, IVR_what);
+#endif
+			}
     }
     
     s->last = what;
