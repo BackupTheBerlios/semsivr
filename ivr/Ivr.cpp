@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.7 2004/06/29 15:50:59 sayer Exp $
+ * $Id: Ivr.cpp,v 1.8 2004/06/30 10:03:21 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -191,7 +191,6 @@ void IvrDialog::onSessionStart(AmRequest* req){
   auto_ptr<IvrScriptEventProcessor> scriptEventP;
   scriptEventP.reset(new IvrScriptEventProcessor(ivrPython->getScriptEventQueue()));
   scriptEventP->start();
-  AmThreadWatcher::instance()->add(scriptEventP.get());
 #endif
   
   // plug on our media handler (in and out)
@@ -205,6 +204,7 @@ void IvrDialog::onSessionStart(AmRequest* req){
 
 #ifdef IVR_PERL
   scriptEventP->stop();
+  AmThreadWatcher::instance()->add(scriptEventP.get());
 #endif
    
   if(!getSession()->sess_stopped.get())
