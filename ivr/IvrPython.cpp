@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.2 2004/06/07 21:59:37 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.3 2004/06/11 16:37:36 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -21,7 +21,6 @@
 
 #define CACHE_PATH "/tmp/"
 
-#include <Python.h>
 #include "log.h"
 #include "AmApi.h"
 #include "Ivr.h"
@@ -42,6 +41,11 @@
 #ifdef IVR_WITH_TTS
 extern "C" cst_voice *register_cmu_us_kal();
 #endif // IVR_WITH_TTS
+
+#ifdef	IVR_PERL
+static IvrPython* mainIvrPython=NULL;
+#endif	//IVR_PERL
+
 /***********************************************************************************************************
  *   Python  extensions
  *
@@ -51,6 +55,7 @@ extern "C" {
 
   static IvrPython* getIvrPythonPointer(){
     IvrPython* pIvrPython = NULL;
+#ifndef IVR_PERL
     PyObject *module = PyImport_ImportModule(PY_MOD_NAME);
     if (module != NULL) {
       PyObject *ivrPythonPointer = PyObject_GetAttrString(module, "ivrPythonPointer");
@@ -60,295 +65,303 @@ extern "C" {
 	Py_DECREF(ivrPythonPointer);
       }
     }
-    return pIvrPython;   
+#else	//IVR_PERL
+	pIvrPython = mainIvrPython;
+#endif	//IVR_PERL
+    return pIvrPython;
   }
 
-  static PyObject* ivrEnqueueMediaFile(PyObject *self, PyObject *args){
+  SCRIPT_DECLARE_FUNC(ivrEnqueueMediaFile) {
+    SCRIPT_DECLARE_VAR;
     char* fileName;
     int front = 1;
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){  
-      if(PyArg_ParseTuple(args,"s|i", &fileName, &front)){
+    if(pIvrPython != NULL){
+      if(SCRIPT_GET_s_i(fileName, front)){
 	string sFileName(fileName);
 	DBG("IVR: enqueuing media file (%s) at the %s",fileName, (front==1?"front\n":"back\n") );
-	//Py_BEGIN_ALLOW_THREADS
+	//SCRIPT_BEGIN_ALLOW_THREADS
 	pIvrPython->mediaHandler->eventQueue.postEvent(
 	    new IvrMediaEvent(IvrMediaHandler::IVR_enqueueMediaFile, sFileName, front));
 	pIvrPython->mediaHandler->eventQueue.processEvents();
 	    DBG("IVR: finished enqueue.\n");
-	//Py_END_ALLOW_THREADS 
-	return Py_BuildValue("i",1);
+	//SCRIPT_END_ALLOW_THREADS
+	SCRIPT_RETURN_i(1);
       }
       else {
-	PyErr_SetString(PyExc_TypeError, "ivrEnqueueMediaFile: parameter mismatch!\n"
+	SCRIPT_ERR_STRING("ivrEnqueueMediaFile: parameter mismatch!\n"
 			"Wanted: filename:string, front=1 (default, optional, 0=at the back)");
-	return NULL; // raise exception
+	SCRIPT_RETURN_NULL; // raise exception
       }
     } else {
-	PyErr_SetString(PyExc_TypeError, "IVR Python Error: Wrong pointer to IvrPython!");
-	return NULL; // raise exception
+	SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+	SCRIPT_RETURN_NULL; // raise exception
     }
   }
 
-  static PyObject* ivrEmptyMediaQueue(PyObject *self, PyObject *args){
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){  
+  SCRIPT_DECLARE_FUNC(ivrEmptyMediaQueue) {
+    SCRIPT_DECLARE_VAR;
+    if(pIvrPython != NULL){
       DBG("IVR: emptying  media queue.\n");
       pIvrPython->mediaHandler->eventQueue.postEvent(
 	    new IvrMediaEvent(IvrMediaHandler::IVR_emptyMediaQueue));
       pIvrPython->mediaHandler->eventQueue.processEvents();
-      return Py_BuildValue("i",1);
+      SCRIPT_RETURN_i(1);
     }   else {
-      PyErr_SetString(PyExc_TypeError, "IVR Python Error: Wrong pointer to IvrPython!");
-      return NULL; 
+      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
     }
   }
 
-  static PyObject* ivrStartRecording(PyObject *self, PyObject *args) {
+  SCRIPT_DECLARE_FUNC(ivrStartRecording) {
+    SCRIPT_DECLARE_VAR;
     char* fileName;
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){  
-      if(PyArg_ParseTuple(args,"s", &fileName)){
+    if(pIvrPython != NULL){
+      if(SCRIPT_GET_s(fileName)){
 	string sFileName(fileName);
 	DBG("IVR: start recording to file (%s)\n",fileName);
        	pIvrPython->mediaHandler->eventQueue.postEvent(
 	    new IvrMediaEvent(IvrMediaHandler::IVR_startRecording, sFileName));
        	pIvrPython->mediaHandler->eventQueue.processEvents();
-	return Py_BuildValue("i",1);
+	SCRIPT_RETURN_i(1);
       } else {
-	return PyString_FromString("IVR Python Error: Wrong Arguments!");
+	SCRIPT_RETURN_STR("IVR Python Error: Wrong Arguments!");
       }
     } else {
-      PyErr_SetString(PyExc_TypeError, "IVR Python Error: Wrong pointer to IvrPython!");
-      return NULL;
-    }  
+      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
+    }
   }
 
-  static PyObject* ivrStopRecording(PyObject *self, PyObject *args){
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){  
+  SCRIPT_DECLARE_FUNC(ivrStopRecording) {
+    SCRIPT_DECLARE_VAR;
+    if(pIvrPython != NULL){
       DBG("IVR: stop recording.\n");
       pIvrPython->mediaHandler->eventQueue.postEvent(
 	    new IvrMediaEvent(IvrMediaHandler::IVR_stopRecording));
       pIvrPython->mediaHandler->eventQueue.processEvents();
-      return Py_BuildValue("i",1);
+      SCRIPT_RETURN_i(1);
     }   else {
-      PyErr_SetString(PyExc_TypeError, "IVR Python Error: Wrong pointer to IvrPython!");
-      return NULL; 
+      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
     }
   }
 
-  static PyObject* ivrEnableDTMFDetection(PyObject *self, PyObject *args){
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){  
+  SCRIPT_DECLARE_FUNC(ivrEnableDTMFDetection) {
+    SCRIPT_DECLARE_VAR;
+    if(pIvrPython != NULL){
       DBG("IVR: enable DTMF Detection.\n");
       pIvrPython->mediaHandler->eventQueue.postEvent(
 	    new IvrMediaEvent(IvrMediaHandler::IVR_enableDTMFDetection));
       pIvrPython->mediaHandler->eventQueue.processEvents();
-      return Py_BuildValue("i",1);
+      SCRIPT_RETURN_i(1);
     }   else {
-      PyErr_SetString(PyExc_TypeError, "IVR Python Error: Wrong pointer to IvrPython!");
-      return NULL; 
+      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
     }
   }
-  
-  static PyObject* ivrDisableDTMFDetection(PyObject *self, PyObject *args){
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){  
+
+  SCRIPT_DECLARE_FUNC(ivrDisableDTMFDetection) {
+    SCRIPT_DECLARE_VAR;
+    if(pIvrPython != NULL){
       DBG("IVR: disable DTMF Detection.\n");
       pIvrPython->mediaHandler->eventQueue.postEvent(
 	    new IvrMediaEvent(IvrMediaHandler::IVR_disableDTMFDetection));
       pIvrPython->mediaHandler->eventQueue.processEvents();
-      return Py_BuildValue("i",1);
+      SCRIPT_RETURN_i(1);
     }   else {
-      PyErr_SetString(PyExc_TypeError, "IVR Python Error: Wrong pointer to IvrPython!");
-      return NULL; 
+      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
     }
   }
-  
-  static PyObject* ivrPauseDTMFDetection(PyObject *self, PyObject *args){
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){  
+
+  SCRIPT_DECLARE_FUNC(ivrPauseDTMFDetection) {
+    SCRIPT_DECLARE_VAR;
+    if(pIvrPython != NULL){
       DBG("IVR: pause DTMF Detection.\n");
       pIvrPython->mediaHandler->eventQueue.postEvent(
 	    new IvrMediaEvent(IvrMediaHandler::IVR_pauseDTMFDetection));
       pIvrPython->mediaHandler->eventQueue.processEvents();
-      return Py_BuildValue("i",1);
+      SCRIPT_RETURN_i(1);
     }   else {
-      PyErr_SetString(PyExc_TypeError, "IVR Python Error: Wrong pointer to IvrPython!");
-      return NULL; 
+      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
     }
   }
 
-  
-  static PyObject* ivrResumeDTMFDetection(PyObject *self, PyObject *args){
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){  
+
+  SCRIPT_DECLARE_FUNC(ivrResumeDTMFDetection) {
+    SCRIPT_DECLARE_VAR;
+    if(pIvrPython != NULL){
       DBG("IVR: resume DTMF Detection.\n");
       pIvrPython->mediaHandler->eventQueue.postEvent(
 	    new IvrMediaEvent(IvrMediaHandler::IVR_resumeDTMFDetection));
       pIvrPython->mediaHandler->eventQueue.processEvents();
-      return Py_BuildValue("i",1);
+      SCRIPT_RETURN_i(1);
     }   else {
-      PyErr_SetString(PyExc_TypeError, "IVR Python Error: Wrong pointer to IvrPython!");
-      return NULL; 
+      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
     }
   }
 
-  static PyObject* ivrUSleep(PyObject *self, PyObject *args) {
+  SCRIPT_DECLARE_FUNC(ivrUSleep) {
+    SCRIPT_DECLARE_VAR;
     int stime;
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){  
-      if(PyArg_ParseTuple(args,"i", &stime)){
+    if(pIvrPython != NULL){
+      if(SCRIPT_GET_i(stime)){
 	DBG("IVR: sleeping %d useconds.\n", stime);
-	Py_BEGIN_ALLOW_THREADS
+	SCRIPT_BEGIN_ALLOW_THREADS
 	usleep(stime);
-	Py_END_ALLOW_THREADS
+	SCRIPT_END_ALLOW_THREADS
 	DBG("IVR: waking up after %d usec.\n", stime);
-	return Py_BuildValue("i",1);
+	SCRIPT_RETURN_i(1);
       } else {
-	return PyString_FromString("IVR Python Error: Wrong Arguments!");
+	SCRIPT_RETURN_STR("IVR Python Error: Wrong Arguments!");
       }
     } else {
-      PyErr_SetString(PyExc_TypeError, "IVR Python Error: Wrong pointer to IvrPython!");
-      return NULL;
-    }  
+      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
+    }
   }
 
 
-  static PyObject* ivrSleep(PyObject *self, PyObject *args) {
+  SCRIPT_DECLARE_FUNC(ivrSleep) {
+    SCRIPT_DECLARE_VAR;
     int stime;
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){  
-      if(PyArg_ParseTuple(args,"i", &stime)){
+    if(pIvrPython != NULL){
+      if(SCRIPT_GET_i(stime)){
 	DBG("IVR: sleeping %d seconds.\n", stime);
-	Py_BEGIN_ALLOW_THREADS
+	SCRIPT_BEGIN_ALLOW_THREADS
 	sleep(stime);
-	Py_END_ALLOW_THREADS
+	SCRIPT_END_ALLOW_THREADS
 	DBG("IVR: waking up after %d sec.\n", stime);
-	return Py_BuildValue("i",1);
+	SCRIPT_RETURN_i(1);
       } else {
-	return PyString_FromString("IVR Python Error: Wrong Arguments!");
+	SCRIPT_RETURN_STR("IVR Python Error: Wrong Arguments!");
       }
     } else {
-      PyErr_SetString(PyExc_TypeError, "IVR Python Error: Wrong pointer to IvrPython!");
-      return NULL;
-    }  
+      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
+    }
   }
 
   /**
-   * Python extention for getting time
+   * Python extension for getting time
    */
-  static PyObject* ivrGetTime(PyObject *self, PyObject *args){
-    return Py_BuildValue("i",(int)time(NULL));
+  SCRIPT_DECLARE_FUNC(ivrGetTime) {
+#ifdef IVR_PERL
+    SCRIPT_DECLARE_VAR; 
+#endif
+    SCRIPT_RETURN_i((int)time(NULL));
   }
-  
+
 
   /**
-   * Python extention for caller name
+   * Python extension for caller name
    */
-  static PyObject* ivrGetFrom(PyObject *self, PyObject *args){
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){ 
-      DBG("ivrGetFrom: returning %s\n", pIvrPython->pCmd->from.c_str()); 
-      return Py_BuildValue("s",pIvrPython->pCmd->from.c_str());
+  SCRIPT_DECLARE_FUNC(ivrGetFrom) {
+    SCRIPT_DECLARE_VAR;
+    if(pIvrPython != NULL){
+      DBG("ivrGetFrom: returning %s\n", pIvrPython->pCmd->from.c_str());
+      SCRIPT_RETURN_s(pIvrPython->pCmd->from.c_str());
     }
     else {
-      return PyString_FromString("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
     }
   }
-  
-  
-  /**
-   * Python extention for callee name
-   */
-  static PyObject* ivrGetTo(PyObject *self, PyObject *args){
-    IvrPython* pIvrPython = getIvrPythonPointer();
-    if(pIvrPython != NULL){ 
-      return Py_BuildValue("s",pIvrPython->pCmd->to.c_str());
-    }
-    else
-      return PyString_FromString("IVR Python Error: Wrong pointer to IvrPython!");
-  }
-  
+
 
   /**
-      * Python extention for caller uri
+   * Python extension for callee name
+   */
+  SCRIPT_DECLARE_FUNC(ivrGetTo) {
+    SCRIPT_DECLARE_VAR;
+    if(pIvrPython != NULL){
+      SCRIPT_RETURN_s(pIvrPython->pCmd->to.c_str());
+    }
+    else
+      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
+  }
+
+
+  /**
+      * Python extension for caller uri
       */
-  static PyObject* ivrGetFromURI(PyObject *self, PyObject *args){
-    IvrPython* pIvrPython = getIvrPythonPointer();
+  SCRIPT_DECLARE_FUNC(ivrGetFromURI) {
+    SCRIPT_DECLARE_VAR;
     if(pIvrPython != NULL){
-      return Py_BuildValue("s",pIvrPython->pCmd->from_uri.c_str());
+      SCRIPT_RETURN_s(pIvrPython->pCmd->from_uri.c_str());
     }
     else
-      return PyString_FromString("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
   }
 
 
   /**
-   * Python extention for callee uri
+   * Python extension for callee uri
    */
-  static PyObject* ivrGetToURI(PyObject *self, PyObject *args){
-    IvrPython* pIvrPython = getIvrPythonPointer();
+  SCRIPT_DECLARE_FUNC(ivrGetToURI) {
+    SCRIPT_DECLARE_VAR;
     if(pIvrPython != NULL){
-      return Py_BuildValue("s",pIvrPython->pCmd->r_uri.c_str());
+      SCRIPT_RETURN_s(pIvrPython->pCmd->r_uri.c_str());
     }
     else
-      return PyString_FromString("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
   }
 
 
   /**
-   * Python extention for domain name
+   * Python extension for domain name
    */
-  static PyObject* ivrGetDomain(PyObject *self, PyObject *args){
-    IvrPython* pIvrPython = getIvrPythonPointer();
+  SCRIPT_DECLARE_FUNC(ivrGetDomain) {
+    SCRIPT_DECLARE_VAR;
     if(pIvrPython != NULL){
-      return Py_BuildValue("s",pIvrPython->pCmd->domain.c_str());
+      SCRIPT_RETURN_s(pIvrPython->pCmd->domain.c_str());
     }
     else
-      return PyString_FromString("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
   }
 
-   
+
   /**
-   * Python extention for redirection
+   * Python extension for redirection
    */
-  static PyObject* ivrRedirect(PyObject *self, PyObject *args){
+  SCRIPT_DECLARE_FUNC(ivrRedirect) {
+#ifdef IVR_PERL
+         SCRIPT_DECLARE_VAR;
+#endif
    //  char* uri;
 
-//     IvrPython* pIvrPython = getIvrPythonPointer();
 //     if(pIvrPython != NULL){
-//       if(PyArg_ParseTuple(args,"s", &uri)){
+//       if(SCRIPT_GET_s(uri)){
 // 	string refer_to(uri);
-// 	Py_BEGIN_ALLOW_THREADS
+// 	SCRIPT_BEGIN_ALLOW_THREADS
 // 	  AmCmd refer_cmd = AmRequestUAC::refer(*pIvrPython->pCmd,refer_to);
-// 	Py_END_ALLOW_THREADS
+// 	SCRIPT_END_ALLOW_THREADS
 // 	  // was send
 // 	  if(pIvrPython->waitForEvent(30000))
-//             return Py_BuildValue("i",1);
+//             SCRIPT_RETURN_i(1);
 //       }
 //       // error
 //       DBG("Redirect timeout\n");
-//       return Py_BuildValue("i",0);
+//       SCRIPT_RETURN_(0);
 //     }
 //     else
-//       return PyString_FromString("IVR Python Error: Wrong pointer to IvrPython!");
-    return NULL;
+//       SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
+    SCRIPT_RETURN_NULL;
   }
 
 
 #ifdef IVR_WITH_TTS
 
-static PyObject* ivrSay(PyObject *self, PyObject *args){
+SCRIPT_DECLARE_FUNC(ivrSay) {
+  SCRIPT_DECLARE_VAR;
   char* ttsText;
 
   int front = 1;
-  IvrPython* pIvrPython = getIvrPythonPointer();
-  if(pIvrPython != NULL){  
-    if(PyArg_ParseTuple(args,"s|i", &ttsText, &front)){
+  if(pIvrPython != NULL){
+    if(SCRIPT_GET_s_i(ttsText, front)){
       string message(ttsText);
-      string msg_filename = string("/tmp/") +  pIvrPython->pCmd->callid + string(".wav");
+      string msg_filename = string("/tmp/") +  pIvrPython->pCmd->callid + message + string(".wav");
       string cache_filename = pIvrPython->tts_cache_path + message + string(".wav");
       if (pIvrPython->tts_caching) {
 	DBG(" trying cache \"%s\" .. ", cache_filename.c_str());
@@ -357,7 +370,7 @@ static PyObject* ivrSay(PyObject *self, PyObject *args){
 	  pIvrPython->mediaHandler->eventQueue.postEvent(
 	      new IvrMediaEvent(IvrMediaHandler::IVR_enqueueMediaFile, cache_filename, front));
 	  pIvrPython->mediaHandler->eventQueue.processEvents();
-	  return Py_BuildValue("i",1);
+	  SCRIPT_RETURN_i(1);
 	} else {
 	  DBG("miss.\n");
 	}
@@ -369,45 +382,44 @@ static PyObject* ivrSay(PyObject *self, PyObject *args){
       w = utt_wave(u);
       float durs;
       durs = (float)w->num_samples/(float)w->sample_rate;
-      
+
       cst_wave_save_riff(w,msg_filename.c_str());
       if (pIvrPython->tts_caching)
 	cst_wave_save_riff(w, cache_filename.c_str());
       delete_utterance(u);
       DBG("%f seconds of speech synthesized\n",durs);
       //-----------------
-      
       pIvrPython->mediaHandler->eventQueue.postEvent(
-	  new IvrMediaEvent(IvrMediaHandler::IVR_enqueueMediaFile, cache_filename, front));
+	  new IvrMediaEvent(IvrMediaHandler::IVR_enqueueMediaFile, msg_filename, front));
       pIvrPython->mediaHandler->eventQueue.processEvents();
 
-      return Py_BuildValue("i",1);
+      SCRIPT_RETURN_i(1);
     } else {
-      PyErr_SetString(PyExc_TypeError, "ivrEnqueueMediaFile: parameter mismatch!\n"+
-		      "Wanted: filename:string, front=1 (default, optional, 0=at the back)");
-      return NULL; // raise exception
+      SCRIPT_ERR_STRING("ivrEnqueueMediaFile: parameter mismatch!\n"
+      				"Wanted: filename:string, front=1 (default, optional, 0=at the back)");
+      SCRIPT_RETURN_NULL; // raise exception
     }
   } else {
-    PyErr_SetString("IVR Python Error: Wrong pointer to IvrPython!");
-    return NULL; // raise exception
+    SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+    SCRIPT_RETURN_NULL; // raise exception
   }
 }
 
 #endif // IVR_WITH_TTS
-  
-  static PyObject* setCallback(PyObject *dummy, PyObject *args)
-  {
+
+  SCRIPT_DECLARE_FUNC(setCallback) {
+    SCRIPT_DECLARE_VAR;
     DBG("setCallback !\n");
+#ifndef IVR_PERL
     PyObject *result = NULL;
     PyObject *temp;
     char* callbackName;
-    
-    IvrPython* pIvrPython = getIvrPythonPointer();
+
     if(pIvrPython != NULL){
-      if (PyArg_ParseTuple(args, "Os:setCallback", &temp, &callbackName)) {
+      if (SCRIPT_GET_Os(temp, callbackName)) {
 					if (!PyCallable_Check(temp)) {
-							PyErr_SetString(PyExc_TypeError, "setCallback: first parameter must be callable");
-							return NULL;
+							SCRIPT_ERR_STRING("setCallback: first parameter must be callable");
+							SCRIPT_RETURN_NULL;
 					}
 					DBG("setting %s.\n", callbackName);
 					PyObject** wantedCallback = 0;
@@ -422,14 +434,14 @@ static PyObject* ivrSay(PyObject *self, PyObject *args){
 					}
 					DBG("asd\n");
 					if (!wantedCallback) {
-							PyErr_SetString(PyExc_TypeError, "setCallback: second parameter must be event name.");
-							return NULL;
+							SCRIPT_ERR_STRING("setCallback: second parameter must be event name.");
+							SCRIPT_RETURN_NULL;
 					}
-					
+
 					Py_XINCREF(temp);         /* Add a reference to new callback */
 					Py_XDECREF(*wantedCallback);  /* Dispose of previous callback */
 					*wantedCallback = temp;       /* Remember new callback */
-					
+
 					/* Boilerplate to return "None" */
 					Py_INCREF(Py_None);
 					result = Py_None;
@@ -438,8 +450,92 @@ static PyObject* ivrSay(PyObject *self, PyObject *args){
       return result;
     } else
       return PyString_FromString("IVR Python Error: Wrong pointer to IvrPython!");
-  }
 
+#else   //IVR_PERL
+	int result = 0;
+    char *temp;
+    char* callbackName;
+
+    if(pIvrPython != NULL){
+      if (SCRIPT_GET_Os(temp, callbackName)) {
+					DBG("setting %s.\n", callbackName);
+					char** wantedCallback = 0;
+					if (!strcasecmp(callbackName, "onBye")) {
+							wantedCallback = &pIvrPython->onByeCallback;
+					} else if (!strcasecmp(callbackName, "onNotify")) {
+							wantedCallback = &pIvrPython->onNotifyCallback;
+					} else if (!strcasecmp(callbackName, "onDTMF")) {
+							wantedCallback = &pIvrPython->onDTMFCallback;
+					} else if (!strcasecmp(callbackName, "onMediaQueueEmpty")) {
+							wantedCallback = &pIvrPython->onMediaQueueEmptyCallback;
+					}
+					DBG("function is %s.\n", temp);
+					if (!wantedCallback) {
+							SCRIPT_ERR_STRING("setCallback: second parameter must be event name.");
+							SCRIPT_RETURN_NULL;
+					}
+
+//					Py_XINCREF(temp);         /* Add a reference to new callback */
+//					Py_XDECREF(*wantedCallback);  /* Dispose of previous callback */
+					*wantedCallback = temp;       /* Remember new callback */
+
+//					/* Boilerplate to return "None" */
+//					Py_INCREF(Py_None);
+					result = 1;
+					DBG("setcallback finished.\n");
+      }
+      SCRIPT_RETURN_i(result);
+    } else
+      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
+#endif  //IVR_PERL
+
+}
+
+
+#ifdef IVR_PERL
+
+XS(boot_DynaLoader) ;
+XS(boot_Ivr) { };
+
+void xs_init(pTHX)
+{
+	char *file = __FILE__;
+	dXSUB_SYS;
+
+	/* DynaLoader is a special case */
+	newXS("DynaLoader::boot_DynaLoader", boot_DynaLoader, file);
+	newXS(PY_MOD_NAME"::""bootstrap", boot_Ivr, file);
+	newXS(PY_MOD_NAME"::""enqueueMediaFile", ivrEnqueueMediaFile, file);
+	newXS(PY_MOD_NAME"::""emptyMediaQueue", ivrEmptyMediaQueue, file);
+	newXS(PY_MOD_NAME"::""startRecording", ivrStartRecording, file);
+	newXS(PY_MOD_NAME"::""stopRecording", ivrStopRecording, file);
+#ifdef IVR_WITH_TTS
+	newXS(PY_MOD_NAME"::""say", ivrSay, file);
+#endif //IVR_WITH_TTS
+       // DTMF functions
+	newXS(PY_MOD_NAME"::""enableDTMFDetection", ivrEnableDTMFDetection, file);
+	newXS(PY_MOD_NAME"::""disableDTMFDetection", ivrDisableDTMFDetection, file);
+	newXS(PY_MOD_NAME"::""pauseDTMFDetection", ivrPauseDTMFDetection, file);
+	newXS(PY_MOD_NAME"::""resumeDTMFDetection", ivrResumeDTMFDetection, file);
+
+       // informational
+	newXS(PY_MOD_NAME"::""getTime", ivrGetTime, file);
+	newXS(PY_MOD_NAME"::""getFrom", ivrGetFrom, file);
+	newXS(PY_MOD_NAME"::""getTo", ivrGetTo, file);
+	newXS(PY_MOD_NAME"::""getFromURI", ivrGetFromURI, file);
+	newXS(PY_MOD_NAME"::""getToURI", ivrGetToURI, file);
+	newXS(PY_MOD_NAME"::""getDomain", ivrGetDomain, file);
+
+       // call transfer functions
+	newXS(PY_MOD_NAME"::""redirect", ivrRedirect, file);
+
+       // setting callbacks
+	newXS(PY_MOD_NAME"::""setCallback", setCallback, file);
+
+	newXS(PY_MOD_NAME"::""sleep", ivrSleep, file);
+	newXS(PY_MOD_NAME"::""usleep", ivrUSleep, file);
+}
+#endif
 } // end of extern "C"
 
 /***********************************************************************************************************
@@ -449,7 +545,7 @@ static PyObject* ivrSay(PyObject *self, PyObject *args){
 */
 
 IvrPython::IvrPython()
-		: isEvent(false), onByeCallback(NULL), onNotifyCallback(0), onDTMFCallback(0), onMediaQueueEmptyCallback(0) 
+		: isEvent(false), onByeCallback(NULL), onNotifyCallback(0), onDTMFCallback(0), onMediaQueueEmptyCallback(0)
 #ifdef IVR_WITH_TTS
     , tts_voice(0)
 #endif //IVR_WITH_TTS
@@ -457,7 +553,7 @@ IvrPython::IvrPython()
   mediaHandler.reset(new IvrMediaHandler(this));
 }
 
-IvrPython::~IvrPython(){
+IvrPython::~IvrPython() {
 
 }
 
@@ -465,10 +561,13 @@ void IvrPython::run(){
    FILE* fp;
    int retval;
 
+#ifndef	IVR_PERL
    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, 0);
+#endif	//IVR_PERL
 //   static PyThreadState* pyMainThreadState;
    fp = fopen((char*)fileName,"r");
    if(fp != NULL){
+#ifndef	IVR_PERL
      PyMethodDef extIvrPython[] = {
        // media functions
        {"enqueueMediaFile", ivrEnqueueMediaFile, METH_VARARGS, "ivr: enqueue media file. "
@@ -485,8 +584,8 @@ void IvrPython::run(){
        {"disableDTMFDetection", ivrDisableDTMFDetection, METH_VARARGS, "disable DTMF detection permanently"},
        {"pauseDTMFDetection", ivrPauseDTMFDetection, METH_VARARGS, "pause DTMF detection temporarily, can be resumed"},
        {"resumeDTMFDetection", ivrResumeDTMFDetection, METH_VARARGS, "resume DTMF detection"},
-       
-       // informational 
+
+       // informational
        {"getTime", ivrGetTime, METH_VARARGS, "Example Module"},
        {"getFrom", ivrGetFrom, METH_VARARGS, "Example Module"},
        {"getTo", ivrGetTo, METH_VARARGS, "Example Module"},
@@ -510,18 +609,18 @@ void IvrPython::run(){
        DBG("Start Python\n");
        Py_Initialize();
        PyEval_InitThreads();
-       pyMainThreadState = PyEval_SaveThread();         
-     }       
+       pyMainThreadState = PyEval_SaveThread();
+     }
      DBG("Start new Python interpreter\n");
      PyEval_AcquireLock();
-//     PyThreadState* pyThreadState;      
+//     PyThreadState* pyThreadState;
      if ( (mainInterpreterThreadState = Py_NewInterpreter()) != NULL){
-       
+
        PyObject* ivrPyInitModule = Py_InitModule(PY_MOD_NAME, extIvrPython);
        PyObject* ivrPythonPointer = PyCObject_FromVoidPtr((void*)this,NULL);
        if (ivrPythonPointer != NULL)
 	 PyModule_AddObject(ivrPyInitModule, "ivrPythonPointer", ivrPythonPointer);
-       
+
        if(!PyRun_SimpleFile(fp,(char*)fileName)){
 	 fclose(fp);
 	 retval = 0;// true;
@@ -531,13 +630,33 @@ void IvrPython::run(){
             ERROR("IVR Python Error: Failed to run \"%s\"\n", (char*)fileName);
 	    retval = -1;// false;
        }
-       
+
        Py_EndInterpreter(mainInterpreterThreadState);
      }
      else{
        ERROR("IVR Python Error: Failed to start new interpreter.\n");
      }
      PyEval_ReleaseLock();
+#else	//IVR_PERL
+
+	mainIvrPython = this;
+	DBG("Start Perl, about to alloc\n");
+	my_perl_interp = perl_alloc();
+	printf("interp is %ld\n", (long) my_perl_interp);
+	printf("filename is %s\n", fileName);
+	DBG("finished alloc Perl, about to construct Perl\n");
+	perl_construct(my_perl_interp);
+	PL_exit_flags |= PERL_EXIT_DESTRUCT_END;
+	char *embedding[] = { "", (char*)fileName};
+	DBG("finished construct Perl, about to parse Perl\n");
+	perl_parse(my_perl_interp, xs_init, 2, embedding, (char **)NULL);
+	DBG("finished parse Perl, about to run Perl\n");
+	perl_run(my_perl_interp);
+	DBG("finished run Perl, about to destruct\n");
+	perl_destruct(my_perl_interp);
+	DBG("finished destruct Perl, about to free\n");
+	perl_free(my_perl_interp);
+#endif	//IVR_PERL
    }
    else{
      ERROR("IVR Python Error: Can not open file \"%s\"\n",(char*) fileName);
@@ -553,7 +672,8 @@ void IvrPython::onBye(AmRequest* req) {
     return;
   }
   DBG("IvrPython::onBye(): calling onByeCallback ...\n");
-  
+
+#ifndef IVR_PERL
   PyThreadState *tstate;
 
   tstate = PyThreadState_New(mainInterpreterThreadState->interp);
@@ -575,6 +695,15 @@ void IvrPython::onBye(AmRequest* req) {
   /* Release the thread. No Python API allowed beyond this point. */
   PyEval_ReleaseThread(tstate);
   PyThreadState_Delete(tstate);
+#else   //IVR_PERL
+	PERL_SET_CONTEXT(my_perl_interp);
+	DBG("context is %ld\n", (long) Perl_get_context());
+
+	dSP ;
+	PUSHMARK(SP) ;
+	call_pv(onByeCallback, G_DISCARD|G_NOARGS) ;
+#endif	//IVR_PERL
+
   DBG("IvrPython::onBye done...\n");
 }
 
@@ -585,8 +714,9 @@ void IvrPython::onNotify(AmSessionEvent* event) {
     return;
   }
   DBG("IvrPython::onNotify(): calling onNotifyCallback ...\n");
-  PyThreadState* pyThreadState;      
-  if ( (pyThreadState = Py_NewInterpreter()) != NULL){  
+#ifndef IVR_PERL
+  PyThreadState* pyThreadState;
+  if ( (pyThreadState = Py_NewInterpreter()) != NULL){
     PyObject *arglist;
     PyObject *result;
     arglist = Py_BuildValue("(s)", event->request.getBody().c_str());;
@@ -598,8 +728,22 @@ void IvrPython::onNotify(AmSessionEvent* event) {
       return ;
     }
     Py_DECREF(result);
-  } 
+  }
   Py_EndInterpreter(pyThreadState);
+#else   //IVR_PERL
+	PERL_SET_CONTEXT(my_perl_interp);
+	DBG("context is %ld\n", (long) Perl_get_context());
+
+	dSP ;
+	ENTER ;
+	SAVETMPS ;
+	PUSHMARK(SP) ;
+	XPUSHs(sv_2mortal(newSVpv((event->request.getBody().c_str()), 0)));
+	PUTBACK ;
+	call_pv(onNotifyCallback, G_DISCARD);
+	FREETMPS ;
+	LEAVE ;
+#endif	//IVR_PERL
 }
 
 void IvrPython::on_stop()
@@ -607,12 +751,13 @@ void IvrPython::on_stop()
 }
 
 void IvrPython::onDTMFEvent(int detectedKey) {
-   if (onByeCallback == NULL) {
+   if (onDTMFCallback == NULL) {
     DBG("IvrPython::onDTMFEvent, but script did not set onDTMF callback!\n(Caution: There must be something wrong here)\n");
     return;
   }
-  DBG("IvrPython::onDTMFEvent(): calling onDTMFCallback ...\n");
+  DBG("IvrPython::onDTMFEvent(): calling onDTMFCallback key is %d...\n", detectedKey);
 
+#ifndef IVR_PERL
   PyThreadState *tstate;
 
   /* interp is your reference to an interpreter object. */
@@ -638,6 +783,21 @@ void IvrPython::onDTMFEvent(int detectedKey) {
   /* You can either delete the thread state, or save it
      until you need it the next time. */
   PyThreadState_Delete(tstate);
+#else   //IVR_PERL
+  DBG("IvrPython::onDTMFEvent(): calling onDTMFCallback func is %s...\n", onDTMFCallback);
+
+	PERL_SET_CONTEXT(my_perl_interp);
+	DBG("context is %ld\n", (long) Perl_get_context());
+	dSP ;
+	ENTER ;
+	SAVETMPS ;
+	PUSHMARK(SP) ;
+	XPUSHs(sv_2mortal(newSViv(detectedKey)));
+	PUTBACK ;
+	call_pv(onDTMFCallback, G_DISCARD);
+	FREETMPS ;
+	LEAVE ;
+#endif	//IVR_PERL
   DBG("IvrPython::onDTMFEvent done...\n");
 }
 
@@ -649,6 +809,7 @@ void IvrPython::onMediaQueueEmpty() {
 	return;
     }
 
+#ifndef IVR_PERL
     PyThreadState *tstate;
 
     /* interp is your reference to an interpreter object. */
@@ -674,6 +835,14 @@ void IvrPython::onMediaQueueEmpty() {
     /* You can either delete the thread state, or save it
        until you need it the next time. */
     PyThreadState_Delete(tstate);
+#else   //IVR_PERL
+	PERL_SET_CONTEXT(my_perl_interp);
+	DBG("context is %ld\n", (long) Perl_get_context());
+
+	dSP ;
+	PUSHMARK(SP) ;
+	call_pv(onMediaQueueEmptyCallback, G_DISCARD|G_NOARGS) ;
+#endif	//IVR_PERL
     DBG("IvrPython::onMediaQueueEmpty done.\n");
 }
 

@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.1 2004/06/07 12:58:52 sayer Exp $
+ * $Id: Ivr.cpp,v 1.2 2004/06/11 16:37:36 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -31,7 +31,7 @@
 #include <pthread.h>
 
 #ifdef IVR_WITH_TTS
-#define CACHE_PATH "/tmp/" 
+#define CACHE_PATH "/tmp/"
 extern "C" cst_voice *register_cmu_us_kal();
 #endif //ivr_with_tts
 // is defined in Ivr.h #define MOD_NAME "ivr"
@@ -66,7 +66,7 @@ int IvrFactory::onLoad(){
 			WARN("no python_script_file in configuration\n");
 			return -1;
 		}
-		
+
 #ifdef IVR_WITH_TTS
 		char* p =0;
     if( ((p = mIvrConfig.getValueForKey("tts_caching")) != NULL) && (*p != '\0') ) {
@@ -84,7 +84,7 @@ int IvrFactory::onLoad(){
       WARN("file for module semstalkflite.\n");
       tts_cache_path  = CACHE_PATH;
     }
-    if( !tts_cache_path.empty() 
+    if( !tts_cache_path.empty()
 	&& tts_cache_path[tts_cache_path.length()-1] != '/' )
       tts_cache_path += "/";
 #endif
@@ -98,21 +98,21 @@ int IvrFactory::onLoad(){
  * if there is no special script default script will be used.
  */
 AmDialogState* IvrFactory::onInvite(AmCmd& cmd){
-   string pythonScriptFile = pythonScriptPath + cmd.domain	+ "/" + cmd.user + ".py";
+   string pythonScriptFile = pythonScriptPath + cmd.domain	+ "/" + cmd.user + SCRIPT_FILE_EXT;
    if(!file_exists(pythonScriptFile))
-      pythonScriptFile = pythonScriptPath + cmd.user + ".py";
+      pythonScriptFile = pythonScriptPath + cmd.user + SCRIPT_FILE_EXT;
       if(!file_exists(pythonScriptFile))
 	      pythonScriptFile = pythonScriptPath + defaultPythonScriptFile;
 #ifndef IVR_WITH_TTS
    return new IvrDialog(pythonScriptFile);
-#else 
+#else
    return new IvrDialog(pythonScriptFile, tts_cache_path, tts_caching);
 #endif
 }
 
 
 #ifndef IVR_WITH_TTS
-IvrDialog::IvrDialog(string scriptFile) 
+IvrDialog::IvrDialog(string scriptFile)
 #else
 IvrDialog::IvrDialog(string scriptFile, string tts_cache_path_, bool tts_caching_)
 				: tts_cache_path(tts_cache_path_), tts_caching(tts_caching_)
@@ -136,23 +136,23 @@ void IvrDialog::onSessionStart(AmRequest* req){
    ivrPython->fileName = (char*)pythonScriptFile.c_str();
    ivrPython->pAmSession = getSession();
    ivrPython->pCmd = &(req->cmd);
-   
+
 #ifdef IVR_WITH_TTS
    ivrPython->tts_voice = tts_voice;
    ivrPython->tts_caching = tts_caching;
-   ivrPython->tts_cache_path = tts_cache_path;   
+   ivrPython->tts_cache_path = tts_cache_path;
 #endif //IVR_WITH_TTS
    ivrPython->start();
    AmThreadWatcher::instance()->add(ivrPython);
    // plug on our media handler (in and out)
-   
+
    DBG("Start duplex...\n");
-   ivrPython->pAmSession->rtp_str.duplex(ivrPython->mediaHandler->getPlayConnector(), 
+   ivrPython->pAmSession->rtp_str.duplex(ivrPython->mediaHandler->getPlayConnector(),
 					 ivrPython->mediaHandler->getRecordConnector());
-					 
+
    DBG("End duplex.\n");
 
-//    sleep(1);                   
+//    sleep(1);
 //    while(!getSession()->sess_stopped.get() && !ivrPython->getStopped()){
 //          processEvents();
 //          sleep(1);
@@ -160,16 +160,20 @@ void IvrDialog::onSessionStart(AmRequest* req){
    if(!getSession()->sess_stopped.get())
       req->bye();
    getSession()->sess_stopped.wait_for();
-   ivrPython->stop(); 
-   ivrPython->cancel(); 
+   ivrPython->stop();
+#ifndef IVR_PERL
+   ivrPython->cancel();
+#endif
 }
 
 
 void IvrDialog::onBye(AmRequest* req){
   if( !ivrPython->getStopped()) {
-    ivrPython->onBye(req);      
+    ivrPython->onBye(req);
     ivrPython->stop();
-    ivrPython->cancel(); 
+#ifndef IVR_PERL
+    ivrPython->cancel();
+#endif
   }
 }
 
@@ -182,7 +186,7 @@ int IvrDialog::onOther(AmSessionEvent* event)
         }
         event->processed = true;
         DBG("Notify event: body= %s\n",event->request.getBody().c_str());
-        
+
     }
 
     return AmDialogState::onOther(event);

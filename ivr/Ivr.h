@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.h,v 1.1 2004/06/07 13:00:23 sayer Exp $
+ * $Id: Ivr.h,v 1.2 2004/06/11 16:37:36 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -18,7 +18,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
- 
+
 #ifndef _IVR_H_
 #define _IVR_H_
 
@@ -28,9 +28,19 @@ typedef void (*ivr_media_queue_empty_callback_t)( void );
 
 #define MOD_NAME "ivr"
 
+#ifndef IVR_PERL
+#define	SCRIPT_FILE_EXT			".py"
+#else	//IVR_PERL
+#define	SCRIPT_FILE_EXT			".pl"
+#endif	//IVR_PERL
+
 #include "AmApi.h"
 #include "SemsConfiguration.h"
 // #include "IvrPython.h"
+
+#ifdef IVR_WITH_TTS
+ #include "flite.h"
+#endif
 
 class IvrPython;
 
@@ -42,7 +52,7 @@ class IvrFactory: public AmStateFactory
 	 SemsConfiguration mIvrConfig;
     string pythonScriptPath;
     string defaultPythonScriptFile;
-    
+
 #ifdef IVR_WITH_TTS
     bool tts_caching;
     string tts_cache_path;
