@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.12 2004/07/05 14:05:20 sayer Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.13 2004/07/05 17:01:45 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -25,7 +25,7 @@
 // uncomment the following line if you have 
 // applied the AmAudio.formatlock.patch to answer_machine directory
 // you can get the patch from http://developer.berlios.de/patch/?group_id=653
-//#define LOCK_INOUT_FMT
+#define LOCK_INOUT_FMT
 
 IvrMediaHandler::IvrMediaHandler()
   : closed(false),

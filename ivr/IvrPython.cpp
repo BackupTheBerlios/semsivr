@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.13 2004/07/05 00:34:38 zrichard Exp $
+ * $Id: IvrPython.cpp,v 1.14 2004/07/05 17:01:45 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -76,7 +76,7 @@ extern "C" {
     char* fileName;
     int front = 1;
     if(pIvrPython != NULL){
-      if(SCRIPT_GET_s_i(fileName, front)){
+      if(SCRIPT_GET_s_optional_i(fileName, front)){
 	string sFileName(fileName);
 	DBG("IVR: enqueuing media file (%s) at the %s",fileName, (front==1?"front\n":"back\n") );
 	//SCRIPT_BEGIN_ALLOW_THREADS
@@ -198,7 +198,9 @@ extern "C" {
 	timeval tvStart, tvNow;
 	gettimeofday(&tvStart,0);
 	pIvrPython->wakeUpFromSleep.set(false);
-	while((!pIvrPython->wakeUpFromSleep.get()) && (timediff < (unsigned int) stime)){
+	while((!pIvrPython->scriptStopped.get()) 
+	      && (!pIvrPython->wakeUpFromSleep.get()) 
+	      && (timediff < (unsigned int) stime)){
 	  usleep(10);
 	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
 	  if (evq)
@@ -208,7 +210,7 @@ extern "C" {
 	}
 	//	usleep(stime);
 	SCRIPT_END_ALLOW_THREADS
-	DBG("IVR: waking up after %d usec.\n", stime);
+	DBG("IVR: waking up after <= %d usec.\n", stime);
 	SCRIPT_RETURN_i(1);
       } else {
 	SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong Arguments!");
@@ -227,21 +229,10 @@ extern "C" {
       if(SCRIPT_GET_i(stime)){
 	DBG("IVR: sleeping %d seconds.\n", stime);
 	SCRIPT_BEGIN_ALLOW_THREADS
-	  unsigned int timediff = 0;
-	timeval tvStart, tvNow;
-	gettimeofday(&tvStart,0);
-	pIvrPython->wakeUpFromSleep.set(false);
-	while((!pIvrPython->wakeUpFromSleep.get()) && (timediff < (unsigned int) stime*1000000)){
-	  usleep(10);
- 	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
- 	  if (evq)
- 	    evq->processEvents();
-	  gettimeofday(&tvNow,0);
-	  timediff = (tvNow.tv_sec - tvStart.tv_sec)* 1000000 + (tvNow.tv_usec - tvStart.tv_usec);
-	}
-	//	sleep(stime);
+	  pIvrPython->doSleep(stime);
+	  //	sleep(stime);
 	SCRIPT_END_ALLOW_THREADS
-	DBG("IVR: waking up after %d sec.\n", stime);
+	DBG("IVR: waking up after <= %d sec.\n", stime);
 	SCRIPT_RETURN_i(1);
       } else {
 	SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong Arguments!");
@@ -379,7 +370,7 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
 
   int front = 1;
   if(pIvrPython != NULL){
-    if(SCRIPT_GET_s_i(ttsText, front)){
+    if(SCRIPT_GET_s_optional_i(ttsText, front)){
       string message(ttsText);
       string msg_filename = string("/tmp/") +  pIvrPython->pCmd->callid + message + string(".wav");
       string cache_filename = pIvrPython->tts_cache_path + message + string(".wav");
@@ -434,6 +425,149 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
 //       SCRIPT_RETURN_NULL;
 //     }
 //   }
+
+/*   Old sequential IVR functions: play(filename), record(filename, timeout), playAndDetect(filename, timeout)
+ *   Warning: do not mix these with the event based functions above.
+ *
+ */
+  SCRIPT_DECLARE_FUNC(ivrPlay) {
+    SCRIPT_DECLARE_VAR;
+    char* fileName;
+    if(pIvrPython != NULL){
+      if(SCRIPT_GET_s(fileName)){
+	pIvrPython->isMediaQueueEmpty.set(false);
+	string sFileName(fileName);
+	DBG("IVR: enqueuing media file (%s) at the front.\n", fileName);
+	//SCRIPT_BEGIN_ALLOW_THREADS
+	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_emptyMediaQueue));
+	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_enqueueMediaFile, sFileName, true));
+	DBG("IVR: finished enqueue. waiting for isMediaQueueEmpty.\n");
+	while((!pIvrPython->scriptStopped.get()) && 
+	      (!pIvrPython->isMediaQueueEmpty.get()) ) {
+	  usleep(1000);
+	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
+	  if (evq)
+	    evq->processEvents();
+	}
+	DBG("IVR: isMediaQueueEmpty. returning to script.\n");
+	//SCRIPT_END_ALLOW_THREADS
+	SCRIPT_RETURN_i(1);
+      }
+      else {
+	SCRIPT_ERR_STRING("ivrPlay: parameter mismatch!\n"
+			"Wanted: filename:string");
+	SCRIPT_RETURN_NULL; // raise exception
+      }
+    } else {
+	SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
+	SCRIPT_RETURN_NULL; // raise exception
+    }
+  }
+
+  SCRIPT_DECLARE_FUNC(ivrRecord) {
+    SCRIPT_DECLARE_VAR;
+    char* fileName;
+    int timeout = 0;
+    if(pIvrPython != NULL){
+      if(SCRIPT_GET_s_optional_i(fileName, timeout)) {
+	DBG("IVR: start record to file (%s).\n", fileName);
+	string sFileName(fileName);
+	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_startRecording, sFileName));
+	SCRIPT_BEGIN_ALLOW_THREADS
+	pIvrPython->doSleep(timeout);
+	SCRIPT_END_ALLOW_THREADS
+	  DBG("IVR: waking up after <= %d sec. Stopping Record\n", timeout);
+	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_stopRecording));
+	SCRIPT_RETURN_i(1);
+      }
+      else {
+	SCRIPT_ERR_STRING("ivrPlay: parameter mismatch!\n"
+			"Wanted: filename:string");
+	SCRIPT_RETURN_NULL; // raise exception
+      }
+    } else {
+	SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
+	SCRIPT_RETURN_NULL; // raise exception
+    }
+  }
+
+  SCRIPT_DECLARE_FUNC(ivrDetect) {
+    SCRIPT_DECLARE_VAR;
+    int timeout = 0;
+    if(pIvrPython != NULL){
+      if (SCRIPT_GET_optional_i(timeout)) {
+	pIvrPython->dtmfKey.set(-1);
+	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_enableDTMFDetection));
+	DBG("IVR: finished enqueue. waiting for isMediaQueueEmpty.\n");
+	unsigned int timediff = 0;
+	timeval tvStart, tvNow;
+	gettimeofday(&tvStart,0);
+	pIvrPython->wakeUpFromSleep.set(false);
+	while((!pIvrPython->scriptStopped.get()) 
+	      && (!pIvrPython->wakeUpFromSleep.get()) 
+	      && ((!timeout) || (timediff < (unsigned int) timeout*1000000))
+	      && (pIvrPython->dtmfKey.get() == -1)){
+	  usleep(100);
+	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
+	  if (evq)
+	    evq->processEvents();
+	  gettimeofday(&tvNow,0);
+	  timediff = (tvNow.tv_sec - tvStart.tv_sec)* 1000000 + (tvNow.tv_usec - tvStart.tv_usec);
+	}
+      DBG("IVR: finished waiting. returning %d to script.\n", pIvrPython->dtmfKey.get());
+      SCRIPT_RETURN_i(pIvrPython->dtmfKey.get());
+      } else {
+	SCRIPT_ERR_STRING("ivrDetect: parameter mismatch!\n"
+			  "Wanted: timeout = 0:int");
+	SCRIPT_RETURN_NULL; // raise exception
+      }
+    }
+    else
+      SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
+  }
+
+
+  SCRIPT_DECLARE_FUNC(ivrPlayAndDetect) {
+    SCRIPT_DECLARE_VAR;
+    int timeout = 0;
+    char* fileName;
+    if(pIvrPython != NULL){
+      if (SCRIPT_GET_s_optional_i(fileName, timeout)) {
+	string sFileName(fileName);
+	pIvrPython->dtmfKey.set(-1);
+	pIvrPython->isMediaQueueEmpty.set(false);
+	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_emptyMediaQueue));
+	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_enableDTMFDetection));
+	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_enqueueMediaFile, sFileName, true));
+	DBG("IVR: finished enqueue. waiting for isMediaQueueEmpty.\n");
+	unsigned int timediff = 0;
+	timeval tvStart, tvNow;
+	gettimeofday(&tvStart,0);
+	pIvrPython->wakeUpFromSleep.set(false);
+	while((!pIvrPython->scriptStopped.get()) 
+	      && (!pIvrPython->wakeUpFromSleep.get()) 
+	      && ((!timeout) || (timediff < (unsigned int) timeout*1000000))
+	      && (pIvrPython->dtmfKey.get() == -1)
+	      && (!pIvrPython->isMediaQueueEmpty.get())) {
+	  usleep(100);
+	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
+	  if (evq)
+	    evq->processEvents();
+	  gettimeofday(&tvNow,0);
+	  timediff = (tvNow.tv_sec - tvStart.tv_sec)* 1000000 + (tvNow.tv_usec - tvStart.tv_usec);
+	}
+      
+      DBG("IVR: isMediaQueueEmpty. returning %d to script.\n", pIvrPython->dtmfKey.get());
+      SCRIPT_RETURN_i(pIvrPython->dtmfKey.get());
+      } else {
+	SCRIPT_ERR_STRING("ivrDetect: parameter mismatch!\n"
+			  "Wanted: timeout = 0:int");
+	SCRIPT_RETURN_NULL; // raise exception
+      }
+    }
+    else
+      SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
+  }
 
 
   SCRIPT_DECLARE_FUNC(setCallback) {
@@ -575,9 +709,10 @@ void xs_init(pTHX)
 */
 
 IvrPython::IvrPython()
-		: isEvent(false), onByeCallback(NULL), onNotifyCallback(0), 
+		: onByeCallback(NULL), onNotifyCallback(0), 
 		  onDTMFCallback(0), onMediaQueueEmptyCallback(0),
-		  mediaEventQueue(0), regScriptEventProducer(0)
+		  mediaEventQueue(0), regScriptEventProducer(0),
+		  isMediaQueueEmpty(false), scriptStopped(false)
 #ifdef IVR_WITH_TTS
     , tts_voice(0)
 #endif //IVR_WITH_TTS
@@ -671,6 +806,14 @@ void IvrPython::run(){
        {"sleep", ivrSleep, METH_VARARGS, "Sleep n seconds, or until wakeUp"},
        {"usleep", ivrUSleep, METH_VARARGS, "Sleep n microseconds, or until wakeUp"},
        {"wakeUp", ivrWakeUp, METH_VARARGS, "wake Up from sleep"},
+
+       // legacy from old ivr: sequential functions
+       {"play", ivrPlay, METH_VARARGS, "play and wait for the end of the file (queue empty)"},
+       {"record", ivrRecord, METH_VARARGS, "record maximum of time secs. Parameter: filename : string, timeout = 0 : int"},
+       {"playAndDetect", ivrPlayAndDetect, METH_VARARGS, "play and wait for the end of the file (queue empty) or keypress"},
+       {"detect", ivrDetect, METH_VARARGS, "detect until timeout Parameter: timeout = 0 : int"},
+
+       
        {NULL, NULL, 0, NULL},
      };
 
@@ -883,8 +1026,27 @@ void IvrPython::onNotify(AmSessionEvent* event) {
 #endif	//IVR_PERL
 }
 
+// sleeps for n seconds, while checking stopped and wakeup
+void IvrPython::doSleep(int seconds) {
+  unsigned int timediff = 0;
+  timeval tvStart, tvNow;
+  gettimeofday(&tvStart,0);
+  wakeUpFromSleep.set(false);
+  while((!scriptStopped.get()) 
+	&& (!wakeUpFromSleep.get()) 
+	&& ((!seconds) || (timediff < (unsigned int) seconds*1000000))) {
+    usleep(10);
+    AmEventQueue* evq = getScriptEventQueue();
+    if (evq)
+      evq->processEvents();
+    gettimeofday(&tvNow,0);
+    timediff = (tvNow.tv_sec - tvStart.tv_sec)* 1000000 + (tvNow.tv_usec - tvStart.tv_usec);
+  }
+}
+
 void IvrPython::on_stop()
 {
+  scriptStopped.set(true);
   if (regScriptEventProducer) {
     DBG("unregistering with script event producer\n");
     regScriptEventProducer->unregisterForeignEventQueue();
@@ -892,8 +1054,10 @@ void IvrPython::on_stop()
 }
 
 void IvrPython::onDTMFEvent(int detectedKey) {
+  dtmfKey.set(detectedKey); // wake up waiting functions...
+
    if (onDTMFCallback == NULL) {
-    DBG("IvrPython::onDTMFEvent, but script did not set onDTMF callback!\n(Caution: There must be something wrong here)\n");
+    DBG("IvrPython::onDTMFEvent, but script did not set onDTMF callback!\n");
     return;
   }
   DBG("IvrPython::onDTMFEvent(): calling onDTMFCallback key is %d...\n", detectedKey);
@@ -944,6 +1108,8 @@ void IvrPython::onDTMFEvent(int detectedKey) {
 
 
 void IvrPython::onMediaQueueEmpty() {
+  isMediaQueueEmpty.set(true);
+
     DBG("executiong MQE callback...\n");
     if (onMediaQueueEmptyCallback == NULL) {
 	DBG("IvrPython::onMediaQueueEmpty, but script did not set onMediaQueueEmpty callback.\n");
