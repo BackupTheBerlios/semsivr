@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.12 2004/07/02 15:01:08 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.13 2004/07/05 00:34:38 zrichard Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -42,11 +42,6 @@
 extern "C" cst_voice *register_cmu_us_kal();
 #endif // IVR_WITH_TTS
 
-#ifdef	IVR_PERL
-static IvrPython* mainIvrPython=NULL;
-#endif	//IVR_PERL
-
-
 #define SAFE_POST_MEDIAEVENT(evt) pIvrPython->postMediaEvent(evt)
 
 /***********************************************************************************************************
@@ -69,7 +64,9 @@ extern "C" {
       }
     }
 #else	//IVR_PERL
-	pIvrPython = mainIvrPython;
+    SV* pivr = get_sv("Ivr::__ivrpointer__", FALSE);
+    if (pivr != NULL)
+	pIvrPython = (IvrPython *) SvUV(pivr);
 #endif	//IVR_PERL
     return pIvrPython;
   }
@@ -713,7 +710,6 @@ void IvrPython::run(){
      PyEval_ReleaseLock();
 #else	//IVR_PERL
 
-	mainIvrPython = this;
 	DBG("Start" SCRIPT_TYPE ", about to alloc\n");
 	my_perl_interp = perl_alloc();
 	printf("interp is %ld\n", (long) my_perl_interp);
@@ -725,6 +721,9 @@ void IvrPython::run(){
 	DBG("finished construct Perl, about to parse Perl\n");
 	perl_parse(my_perl_interp, xs_init, 2, embedding, (char **)NULL);
 	DBG("finished parse Perl, about to run Perl\n");
+	SV *pivr = get_sv("Ivr::__ivrpointer__", TRUE);
+	DBG("Ivr::__ivrpointer__ is %lx.\n", (unsigned long int) pivr);
+	sv_setuv(pivr, (unsigned int) this);
 	perl_run(my_perl_interp);
 	DBG("finished run Perl, about to sleep 5 seconds to let callback event catch up\n");
 	sleep(5);
