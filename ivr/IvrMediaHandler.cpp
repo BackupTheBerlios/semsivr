@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.18 2004/07/12 15:21:23 ilk Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.19 2004/07/20 19:00:17 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -346,6 +346,13 @@ int IvrAudioConnector::streamGet(unsigned int user_ts, unsigned int size) {
     //	 DBG("no active mnedia\n");
     return 0; // TODO: check if return 0 is correct
   }
+  
+//   if (100 == deb_cnt++) {
+//       DBG("usleeping 500000\n");
+//       usleep(500000);
+//       DBG("usleeping 500000 done\n");
+//   }
+
   int ret = activeMedia->streamGetRaw(user_ts, size);
   //		DBG("Got %d.", ret);
   while (ret<0) {
@@ -395,8 +402,18 @@ int IvrAudioConnector::startRecording(string& filename) {
     stopRecording();
   }
 
-  mediaIn = new AmAudioFile("Wav", 1);
+  
    
+  unsigned int dot_pos = filename.rfind('.');
+  string ext = filename.substr(dot_pos+1);
+
+  // this could be done a bit nicer...
+  if ((ext == "mp3") || (ext == "MP3")) {
+      mediaIn = new AmAudioFile("MP3", 1);
+  } else {
+      mediaIn = new AmAudioFile("Wav", 1);
+  }
+  
   if(mediaIn->open(filename.c_str(),AmAudioFile::Write)){
     ERROR("AmRtpStream::record(): Cannot open file\n");
     delete mediaIn;
