@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.14 2004/08/10 10:36:05 sayer Exp $
+ * $Id: Ivr.cpp,v 1.15 2004/08/10 10:39:05 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -250,22 +250,22 @@ void IvrDialog::onBye(AmRequest* req){
 
 int IvrDialog::onOther(AmSessionEvent* event)
 {
-    DBG("NOTIFY ---- \n\n\n\n");
-    if(event->event_id == AmSessionEvent::Notify){
-	DBG("Notify received...\n");
-	AmNotifySessionEvent* notifyEvent = dynamic_cast<AmNotifySessionEvent*>(event);
-	if (!notifyEvent) {
-	    ERROR("Invalid In-Session Notify event received.\n");
-	    return 1;
-	}
-	DBG("evtpackage == %s\n", notifyEvent->getEventPackage().c_str());
-	if (notifyEvent->getEventPackage()=="refer") { // we only handle refer-NOTIFYs
-	    if (event->request.reply(200, "OK")) 
-		DBG("Could not reply 200 (request was NOTIFY)\n");
-	    DBG("NOTIFY Event Body: %s", event->request.getBody().c_str());
-	}
+//       DBG("NOTIFY ---- \n\n\n\n");
+//     if(event->event_id == AmSessionEvent::Notify){
+// 	DBG("Notify received...\n");
+// 	AmNotifySessionEvent* notifyEvent = dynamic_cast<AmNotifySessionEvent*>(event);
+// 	if (!notifyEvent) {
+// 	    ERROR("Invalid In-Session Notify event received.\n");
+// 	    return 1;
+// 	}
+// 	DBG("evtpackage == %s\n", notifyEvent->getEventPackage().c_str());
+// 	if (notifyEvent->getEventPackage()=="refer") { // we only handle refer-NOTIFYs
+// 	    if (event->request.reply(200, "OK")) 
+// 		DBG("Could not reply 200 (request was NOTIFY)\n");
+// 	    DBG("NOTIFY Event Body: %s", event->request.getBody().c_str());
+// 	}
 	       
-    }
+//     }
 //   if(event->event_id == AmSessionEvent::Notify){
 //         ivrPython->postScriptEvent(new IvrScriptEvent(IvrScriptEvent::IVR_Notify, event));
 //         if (strstr(event->request.getBody().c_str(),"200 OK") != NULL){
