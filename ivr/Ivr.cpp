@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.4 2004/06/18 19:51:59 sayer Exp $
+ * $Id: Ivr.cpp,v 1.5 2004/06/22 19:16:47 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -148,7 +148,10 @@ IvrDialog::IvrDialog(string scriptFile, string tts_cache_path_, bool tts_caching
 #endif
 {
    pythonScriptFile = scriptFile;
-   mediaHandler.reset(new IvrMediaHandler(this)); // temporarily set us for script event queue
+   mediaHandler = new IvrMediaHandler(this); // temporarily set us for script event queue
+
+   ivrPython = new IvrPython(this);
+   ivrPython->fileName = (char*)pythonScriptFile.c_str();
 
 #ifdef IVR_WITH_TTS
     flite_init();
@@ -159,61 +162,60 @@ IvrDialog::IvrDialog(string scriptFile, string tts_cache_path_, bool tts_caching
 #endif
 }
 
-IvrDialog::~IvrDialog(){
+IvrDialog::~IvrDialog()
+{
+#ifndef IVR_PERL
+  if (!ivrPython->getStopped())
+    ivrPython->cancel();  // kill the interpreter thread if not already stopped
+#endif
+
+  delete mediaHandler;
 }
 
 void IvrDialog::onSessionStart(AmRequest* req){
-   ivrPython = new IvrPython(this);
-   ivrPython->fileName = (char*)pythonScriptFile.c_str();
-   ivrPython->pAmSession = getSession();
-   ivrPython->pCmd = &(req->cmd);
+  ivrPython->pAmSession = getSession();
+  ivrPython->pCmd = &(req->cmd);
    
-   mediaHandler->setScriptEventQueue(ivrPython->getScriptEventQueue());
-
+  mediaHandler->setScriptEventQueue(ivrPython->getScriptEventQueue());
+  
 #ifdef IVR_WITH_TTS
-   ivrPython->tts_voice = tts_voice;
-   ivrPython->tts_caching = tts_caching;
-   ivrPython->tts_cache_path = tts_cache_path;
+  ivrPython->tts_voice = tts_voice;
+  ivrPython->tts_caching = tts_caching;
+  ivrPython->tts_cache_path = tts_cache_path;
 #endif //IVR_WITH_TTS
-   ivrPython->start();
-   AmThreadWatcher::instance()->add(ivrPython);
-   // plug on our media handler (in and out)
-
-   DBG("Start duplex...\n");
-   ivrPython->pAmSession->rtp_str.duplex(mediaHandler->getPlayConnector(),
-					 mediaHandler->getRecordConnector());
-
-   DBG("End duplex.\n");
-
-//    sleep(1);
-//    while(!getSession()->sess_stopped.get() && !ivrPython->getStopped()){
-//          processEvents();
-//          sleep(1);
-//    }
-   if(!getSession()->sess_stopped.get())
-      req->bye();
-   getSession()->sess_stopped.wait_for();
-   ivrPython->stop();
-   //#ifndef IVR_PERL
-   //ivrPython->cancel();
-   //#endif
-    
-    DBG("()ivrPython is %s \n", ivrPython->getStopped()? "stopped":"not stopped yet");
-    for (int i=0;i<100;i++) {
-      if (ivrPython->getStopped())
-	break;
-      usleep(5000);
-    }
-#ifndef IVR_PERL
- 
-    if (!ivrPython->getStopped()) {
-      DBG("()pthread_cancel()\n");
-      ivrPython->cancel();
-    }
+  ivrPython->start();
+  AmThreadWatcher::instance()->add(ivrPython);
+  
+   // start new thread to process script events
+#ifdef IVR_PERL
+  auto_ptr<IvrScriptEventProcessor> scriptEventP;
+  scriptEventP.reset(new IvrScriptEventProcessor(ivrPython->getScriptEventQueue()));
+  scriptEventP->start();
+  AmThreadWatcher::instance()->add(scriptEventP.get());
 #endif
-    DBG("run_fin\n");
+  
+  // plug on our media handler (in and out)
+  DBG("Start duplex...\n");
+  ivrPython->pAmSession->rtp_str.duplex(mediaHandler->getPlayConnector(),
+					mediaHandler->getRecordConnector());
+   
+  DBG("End duplex.\n");
+#ifdef IVR_PERL
+  scriptEventP->stop();
+#endif
+   
+  if(!getSession()->sess_stopped.get())
+    req->bye();
+  DBG("Waiting for the interpreter to stop\n");  
+  ivrPython->stop();
+  for (int i=0;i<10;i++) { // give the interpreter thread at least 1s to finish
+    if (ivrPython->getStopped())
+      break;
+    usleep(100000); 
+  }
+  
+  DBG("finished.\n");
 }
-
 
 void IvrDialog::onBye(AmRequest* req){
   if(!ivrPython->getStopped()) {
@@ -294,3 +296,26 @@ int IvrDialog::handleMediaEvent(IvrMediaEvent* evt) {
   
   return 0;
 }
+
+#ifdef IVR_PERL
+IvrScriptEventProcessor::IvrScriptEventProcessor(AmEventQueue* watchThisQueue) 
+  : runcond(true), q(watchThisQueue)
+{
+}
+
+void IvrScriptEventProcessor::on_stop() {
+  runcond.set(false);
+}
+void IvrScriptEventProcessor::run() {
+  usleep(500);
+  while (runcond.get()) {
+    q->processEvents();
+    usleep(SCRIPT_EVENT_CHECK_INTERVAL_US);
+  }
+  DBG("IvrScriptEventProcessor exiting.\n");
+}
+
+IvrScriptEventProcessor::~IvrScriptEventProcessor() {
+  DBG("IvrScriptEventProcessor destroyed.\n");
+}
+#endif //IVR_PERL

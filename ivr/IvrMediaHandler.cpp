@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.3 2004/06/22 14:02:11 sayer Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.4 2004/06/22 19:16:47 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -45,26 +45,27 @@ void IvrMediaHandler::setScriptEventQueue(AmEventQueue* newScriptEventQueue) {
 
 IvrMediaHandler::~IvrMediaHandler()
 {
+  //  DBG("Media Handler  being destroyed...\n");
 }
 
 int IvrMediaHandler::enqueueMediaFile(string fileName, bool front) {
-		IvrMediaWrapper* wav_file = new IvrMediaWrapper(string("Wav"));
-		DBG("Queue: enqueuing %d with out = %d.\n", (int)wav_file, (int)wav_file->out.get());
-		
-		if(wav_file->open(fileName.c_str(),AmAudioFile::Read)){
-				ERROR("IvrMediaHandler::enqueueMediaFile: Cannot open file %s\n", fileName.c_str());
-				return -1;
-		}
-
-		if (front || mediaOutQueue.empty())
-				playConnector.setActiveMedia(wav_file);
-
-		if (front) {
-				mediaOutQueue.push_front(wav_file);
-		} else {
-				mediaOutQueue.push_back(wav_file);
-		}
-		return 0; //ok
+  IvrMediaWrapper* wav_file = new IvrMediaWrapper(string("Wav"));
+  DBG("Queue: enqueuing %d with out = %d.\n", (int)wav_file, (int)wav_file->out.get());
+  
+  if(wav_file->open(fileName.c_str(),AmAudioFile::Read)){
+    ERROR("IvrMediaHandler::enqueueMediaFile: Cannot open file %s\n", fileName.c_str());
+    return -1;
+  }
+  
+  if (front || mediaOutQueue.empty())
+    playConnector.setActiveMedia(wav_file);
+  
+  if (front) {
+    mediaOutQueue.push_front(wav_file);
+  } else {
+    mediaOutQueue.push_back(wav_file);
+  }
+  return 0; //ok
 }
 
 int IvrMediaHandler::emptyMediaQueue() {

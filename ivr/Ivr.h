@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.h,v 1.4 2004/06/18 19:51:59 sayer Exp $
+ * $Id: Ivr.h,v 1.5 2004/06/22 19:16:47 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -85,7 +85,7 @@ class IvrDialog : public AmDialogState
     void process(AmEvent* event); // we override this to process also mediaEvents
     int handleMediaEvent(IvrMediaEvent* evt); // which come here then
 
-    auto_ptr<IvrMediaHandler> mediaHandler;
+    IvrMediaHandler* mediaHandler;
  public:
     IvrPython* ivrPython;
 #ifndef IVR_WITH_TTS
@@ -99,5 +99,19 @@ class IvrDialog : public AmDialogState
     void onBye(AmRequest* req);
     int onOther(AmSessionEvent* event);
 };
+
+#ifdef IVR_PERL
+#define SCRIPT_EVENT_CHECK_INTERVAL_US 500 
+class IvrScriptEventProcessor : public AmThread {
+  AmSharedVar<bool> runcond;
+  AmEventQueue* q;
+ public:
+  IvrScriptEventProcessor(AmEventQueue* watchThisQueue);
+  ~IvrScriptEventProcessor();
+  void run();
+  void on_stop();
+};
+#endif // IVR_PERL
+
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.5 2004/06/18 19:51:59 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.6 2004/06/22 19:16:47 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -801,7 +801,7 @@ void IvrPython::onBye(AmRequest* req) {
 
 
 void IvrPython::onNotify(AmSessionEvent* event) {
-   if (onByeCallback == NULL) {
+   if (onNotifyCallback == NULL) {
     DBG("IvrPython::onNotify, but script did not set onNotify callback!\n");
     return;
   }
