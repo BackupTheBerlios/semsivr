@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.10 2004/07/02 14:58:14 sayer Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.11 2004/07/05 14:02:03 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -21,6 +21,10 @@
 #include "IvrPython.h"
 #include "IvrMediaHandler.h"
 #include "log.h"
+
+// uncomment the following line if you have 
+// applied the AmAudio.formatlock.patch to answer_machine
+//#define LOCK_INOUT_FMT
 
 IvrMediaHandler::IvrMediaHandler()
   : closed(false),
@@ -248,12 +252,24 @@ void IvrAudioConnector::setScriptEventQueue(AmEventQueue* newScriptEventQueue) {
 void IvrAudioConnector::setDefaultFormat() {
     if (isPlayConnector) {
       DBG("Setting in format of play connector to default format.\n");
+#ifdef LOCK_INOUT_FMT
+      lockInFmt();
+#endif
       in.release();
       in.reset(myInternalFormat);
+#ifdef LOCK_INOUT_FMT
+      unlockInFmt();
+#endif
     } else {
       DBG("Setting out format of record connector to default format.\n");
+#ifdef LOCK_INOUT_FMT
+      lockOutFmt();
+#endif
       out.release();
       out.reset(myInternalFormat);
+#ifdef LOCK_INOUT_FMT
+      unlockOutFmt();
+#endif
     }
 }
 
@@ -267,11 +283,23 @@ void IvrAudioConnector::setActiveMedia(IvrMediaWrapper* newMedia) {
 void IvrAudioConnector::refreshFormat() {
   if (activeMedia) {
     if (isPlayConnector) {
+#ifdef LOCK_INOUT_FMT
+      lockInFmt();
+#endif
       in.release(); // we don't own the fmt!
       in.reset(activeMedia->in.get());
+#ifdef LOCK_INOUT_FMT
+      unlockInFmt();
+#endif
     } else {
+#ifdef LOCK_INOUT_FMT
+      lockOutFmt();
+#endif
       out.release(); // we don't own the fmt!
       out.reset(activeMedia->out.get());
+#ifdef LOCK_INOUT_FMT
+      unlockOutFmt();
+#endif
     }
   } else {
     setDefaultFormat();
