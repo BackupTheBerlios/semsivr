@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.17 2004/07/12 14:58:58 ilk Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.18 2004/07/12 15:21:23 ilk Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -375,7 +375,7 @@ int IvrAudioConnector::streamPut(unsigned int user_ts, unsigned int size) {
   int ret = 0;    //*TODO: -1 ?
   
   if (detectionRunning && dtmfDetector) {
-    DBG("IvrMediaHandler::streamPut : detecting DTMF.\n");
+    //DBG("IvrMediaHandler::streamPut : detecting DTMF.\n");
     dtmfDetector->streamPut((unsigned char*)samples, size, user_ts );
     ret = size;
   }

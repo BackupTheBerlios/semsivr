@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.18 2004/07/10 10:32:00 zrichard Exp $
+ * $Id: IvrPython.cpp,v 1.19 2004/07/12 15:21:23 ilk Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -571,7 +571,7 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
 	pIvrPython->isMediaQueueEmpty.set(false);
 	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_emptyMediaQueue));
 	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_enableDTMFDetection));
-	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_enqueueMediaFile, sFileName, true));
+	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_enqueueMediaFile, sFileName, true, true));
 	DBG("IVR: finished enqueue. waiting for isMediaQueueEmpty.\n");
 	unsigned int timediff = 0;
 	timeval tvStart, tvNow;
@@ -581,9 +581,10 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
 	      && (!pIvrPython->wakeUpFromSleep.get()) 
 	      && ((!timeout) || (timediff < (unsigned int) timeout*1000000))
 	      && (pIvrPython->dtmfKey.get() == -1)
-	      && (!pIvrPython->isMediaQueueEmpty.get())) {
-	  usleep(100);
-	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
+	      && (!pIvrPython->isMediaQueueEmpty.get())){
+
+         usleep(100);
+	   AmEventQueue* evq = pIvrPython->getScriptEventQueue();
 	  if (evq)
 	    evq->processEvents();
 	  gettimeofday(&tvNow,0);

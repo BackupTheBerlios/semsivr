@@ -1,5 +1,5 @@
 /*
- * $Id: IvrEvents.cpp,v 1.2 2004/06/30 10:41:35 sayer Exp $
+ * $Id: IvrEvents.cpp,v 1.3 2004/07/12 15:21:23 ilk Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -25,8 +25,8 @@
 IvrEventProducer::IvrEventProducer() {
 }
 
-IvrMediaEvent::IvrMediaEvent(int event_id, string MediaFile, bool front) 
-    :    AmEvent(event_id), MediaFile(MediaFile), front(front)
+IvrMediaEvent::IvrMediaEvent(int event_id, string MediaFile, bool front, bool loop) 
+    :    AmEvent(event_id), MediaFile(MediaFile), front(front), loop(loop)
 {
     DBG("New Media Event: %d, %s\n", event_id, MediaFile.c_str());
 }

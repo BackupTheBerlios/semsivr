@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.12 2004/07/02 06:28:34 zrichard Exp $
+ * $Id: Ivr.cpp,v 1.13 2004/07/12 15:21:23 ilk Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -293,7 +293,7 @@ int IvrDialog::handleMediaEvent(IvrMediaEvent* evt) {
   }
   switch (evt->event_id) {
   case IvrMediaEvent::IVR_enqueueMediaFile: {
-    return mediaHandler->enqueueMediaFile(evt->MediaFile, evt->front);
+    return mediaHandler->enqueueMediaFile(evt->MediaFile, evt->front, evt->loop);
   }; break;
   case IvrMediaEvent::IVR_emptyMediaQueue: {
     return mediaHandler->emptyMediaQueue();
