@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.21 2004/07/16 12:11:24 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.22 2004/07/29 11:35:29 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -471,7 +471,7 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
 	pIvrPython->isMediaQueueEmpty.set(false);
 	string sFileName(fileName);
 	DBG("IVR: enqueuing media file (%s) at the front.\n", fileName);
-	//SCRIPT_BEGIN_ALLOW_THREADS
+	SCRIPT_BEGIN_ALLOW_THREADS
 	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_emptyMediaQueue));
 	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_enqueueMediaFile, sFileName, true));
 	DBG("IVR: finished enqueue. waiting for isMediaQueueEmpty.\n");
@@ -483,7 +483,7 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
 	    evq->processEvents();
 	}
 	DBG("IVR: isMediaQueueEmpty. returning to script.\n");
-	//SCRIPT_END_ALLOW_THREADS
+	SCRIPT_END_ALLOW_THREADS
 	SCRIPT_RETURN_i(1);
       }
       else {
@@ -529,6 +529,7 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
     int timeout = 0;
     if(pIvrPython != NULL){
       if (SCRIPT_GET_optional_i(timeout)) {
+	SCRIPT_BEGIN_ALLOW_THREADS
 	pIvrPython->dtmfKey.set(-1);
 	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_enableDTMFDetection));
 	DBG("IVR: finished enqueue. waiting for isMediaQueueEmpty.\n");
@@ -547,8 +548,9 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
 	  gettimeofday(&tvNow,0);
 	  timediff = (tvNow.tv_sec - tvStart.tv_sec)* 1000000 + (tvNow.tv_usec - tvStart.tv_usec);
 	}
-      DBG("IVR: finished waiting. returning %d to script.\n", pIvrPython->dtmfKey.get());
-      SCRIPT_RETURN_i(pIvrPython->dtmfKey.get());
+	SCRIPT_END_ALLOW_THREADS
+	DBG("IVR: finished waiting. returning %d to script.\n", pIvrPython->dtmfKey.get());
+	SCRIPT_RETURN_i(pIvrPython->dtmfKey.get());
       } else {
 	SCRIPT_ERR_STRING("ivrDetect: parameter mismatch!\n"
 			  "Wanted: timeout = 0:int");
@@ -566,6 +568,7 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
     char* fileName;
     if(pIvrPython != NULL){
       if (SCRIPT_GET_s_optional_i(fileName, timeout)) {
+	SCRIPT_BEGIN_ALLOW_THREADS
 	string sFileName(fileName);
 	pIvrPython->dtmfKey.set(-1);
 	pIvrPython->isMediaQueueEmpty.set(false);
@@ -590,9 +593,9 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
 	  gettimeofday(&tvNow,0);
 	  timediff = (tvNow.tv_sec - tvStart.tv_sec)* 1000000 + (tvNow.tv_usec - tvStart.tv_usec);
 	}
-      
-      DBG("IVR: isMediaQueueEmpty. returning %d to script.\n", pIvrPython->dtmfKey.get());
-      SCRIPT_RETURN_i(pIvrPython->dtmfKey.get());
+      	SCRIPT_END_ALLOW_THREADS    
+	DBG("IVR: isMediaQueueEmpty. returning %d to script.\n", pIvrPython->dtmfKey.get());
+	SCRIPT_RETURN_i(pIvrPython->dtmfKey.get());
       } else {
 	SCRIPT_ERR_STRING("ivrDetect: parameter mismatch!\n"
 			  "Wanted: timeout = 0:int");
@@ -685,10 +688,26 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
     } else
       SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
 #endif  //IVR_PERL
+  }
 
-}
 
-
+  SCRIPT_DECLARE_FUNC(ivrMediaThreadUSleep) {
+    SCRIPT_DECLARE_VAR;
+    int stime;
+    if(pIvrPython != NULL){
+      if(SCRIPT_GET_i(stime)){
+	DBG("IVR: let media thread sleep %d useconds.\n", stime);
+	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_mthr_usleep, stime));
+	SCRIPT_RETURN_i(1);
+      } else {
+	SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong Arguments!");
+      }
+    } else {
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
+    }
+  }
+ 
 #ifdef IVR_PERL
 
 XS(boot_DynaLoader) ;
@@ -854,8 +873,10 @@ void IvrPython::run(){
        {"record", ivrRecord, METH_VARARGS, "record maximum of time secs. Parameter: filename : string, timeout = 0 : int"},
        {"playAndDetect", ivrPlayAndDetect, METH_VARARGS, "play and wait for the end of the file (queue empty) or keypress"},
        {"detect", ivrDetect, METH_VARARGS, "detect until timeout Parameter: timeout = 0 : int"},
+// for jitter/clock skew generation test only
+// DONT CALL THIS FUNCTION
+       {"mediaThreadUSleep", ivrMediaThreadUSleep, METH_VARARGS, "let mthr sleep, dont call this function"},
 
-       
        {NULL, NULL, 0, NULL},
      };
 
@@ -1121,7 +1142,7 @@ void IvrPython::onDTMFEvent(int detectedKey) {
 
   if (result == NULL) {
       DBG("Calling IVR" SCRIPT_TYPE "onDTMF failed.\n");
-      // PyErr_Print();
+       PyErr_Print();
       //return ;
   } else {
       Py_DECREF(result);
