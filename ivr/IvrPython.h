@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.h,v 1.9 2004/07/06 09:17:14 zrichard Exp $
+ * $Id: IvrPython.h,v 1.10 2004/08/10 11:03:54 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -137,6 +137,7 @@ class IvrPython : public AmThread, AmEventHandler, IvrEventProducer
 
 #ifndef IVR_PERL
 #define	SCRIPT_GET_s(sStr)	PyArg_ParseTuple(args,"s", &sStr)
+#define	SCRIPT_GET_ssss(sStr1, sStr2, sStr3, sStr4)	PyArg_ParseTuple(args,"ssss", &sStr1,  &sStr2,  &sStr3,  &sStr4)
 #define SCRIPT_GET_i(iNum)  PyArg_ParseTuple(args,"i", &iNum)
 #define SCRIPT_GET_optional_i(iNum) PyArg_ParseTuple(args,"|i", &iNum)
 #define SCRIPT_GET_s_i(sStr, iNum)	PyArg_ParseTuple(args,"si", &sStr, &iNum)
@@ -156,11 +157,17 @@ class IvrPython : public AmThread, AmEventHandler, IvrEventProducer
 
 #define SCRIPT_GET_s(sStr)  ( (items!=1) ? 0 : \
 			({STRLEN paralen; sStr = SvPV(ST(0), paralen); 1; }) )
+#define	SCRIPT_GET_ssss(sStr1,sStr2,sStr3,sStr4)  ( (items!=4) ? 0 : \
+			({STRLEN paralen; sStr1 = SvPV(ST(0), paralen); \
+                                          sStr2 = SvPV(ST(1), paralen); \
+                                          sStr3 = SvPV(ST(2), paralen); \
+                                          sStr4 = SvPV(ST(3), paralen);  1; }) )
 #define SCRIPT_GET_i(iNum)  ( (items!=1) ? 0 : ({iNum = SvIV(ST(0)); 1; }) )
 #define SCRIPT_GET_optional_i(iNum) ( (items>1) ? 0 : \
 			({ (items==1) ? iNum=SvIV(ST(0)):0 ;1; }) )
 #define SCRIPT_GET_s_i(sStr,iNum)  ( (items!=2) ? 0 : \
 			({STRLEN paralen; sStr = SvPV(ST(0), paralen); iNum=SvIV(ST(1)); 1; }) )
+
 #define SCRIPT_GET_s_optional_i(sStr,iNum) ( ( (items<1) || (items>2) ) ? 0 : \
 			({STRLEN paralen; sStr = SvPV(ST(0), paralen); (items==2) ? iNum=SvIV(ST(1)):0 ;1; }) )
 #define SCRIPT_GET_Os(oFunc, sName)  ( (items!=2) ? 0 : \

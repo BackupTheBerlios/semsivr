@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.22 2004/07/29 11:35:29 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.23 2004/08/10 11:03:54 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -394,7 +394,34 @@ extern "C" {
 	}
 	SCRIPT_RETURN_NULL;  
     }
-    
+
+
+    SCRIPT_DECLARE_FUNC(ivrDialout) {
+	SCRIPT_DECLARE_VAR;
+	char* user;
+	char* app_name;
+	char* uri;
+	char* from_user;
+			
+	if(pIvrPython != NULL){
+	    if(SCRIPT_GET_ssss(user, app_name, uri, from_user)){
+	      string s_user(user);
+	      string s_app_name(app_name);
+	      string s_uri(uri);
+	      string s_from_user(from_user);
+	      string callid;
+	      SCRIPT_BEGIN_ALLOW_THREADS
+		AmCmd dialout_cmd = AmRequestUAC::dialout(s_user, s_app_name, s_uri, s_from_user);
+	      callid = dialout_cmd.callid;
+	       SCRIPT_END_ALLOW_THREADS
+		 SCRIPT_RETURN_s(callid.c_str());
+	    }
+	    else
+		SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
+	}
+	SCRIPT_RETURN_NULL;  
+    }
+
 #ifdef IVR_WITH_TTS
 
 SCRIPT_DECLARE_FUNC(ivrSay) {
@@ -744,6 +771,7 @@ void xs_init(pTHX)
 
        // call transfer functions
 	newXS(PY_MOD_NAME"::""redirect", ivrRedirect, file);
+	newXS(PY_MOD_NAME"::""dialout", ivrDialout, file);
 
        // setting callbacks
 	newXS(PY_MOD_NAME"::""setCallback", setCallback, file);
@@ -859,6 +887,7 @@ void IvrPython::run(){
 
        // call transfer functions
        {"redirect", ivrRedirect, METH_VARARGS, "Example Module"},
+       {"dialout", ivrDialout, METH_VARARGS, "Example Module"},
 
        // setting callbacks
        {"setCallback", setCallback, METH_VARARGS, "Example Module"},
