@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.h,v 1.6 2004/07/05 17:01:45 sayer Exp $
+ * $Id: IvrPython.h,v 1.7 2004/07/05 17:37:12 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -23,8 +23,6 @@
 #ifndef IVR_PYTHON_H
 #define IVR_PYTHON_H
 
-#include "AmThread.h"
-#include "AmSession.h"
 #ifndef IVR_PERL
 #include <Python.h>
 #include <compile.h>
@@ -34,6 +32,10 @@
 #include <perl.h>                       /* from the Perl distribution */
 #include <XSUB.h>                       /* from the Perl distribution */
 #endif	//IVR_PERL
+
+#include "AmThread.h"
+#include "AmSession.h"
+
 #include "IvrMediaHandler.h"
 #include "IvrDtmfDetector.h"
 #include "Ivr.h"
