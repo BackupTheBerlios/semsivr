@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.11 2004/07/02 13:49:00 zrichard Exp $
+ * $Id: IvrPython.cpp,v 1.12 2004/07/02 15:01:08 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -200,7 +200,8 @@ extern "C" {
 	  unsigned int timediff = 0;
 	timeval tvStart, tvNow;
 	gettimeofday(&tvStart,0);
-	while(timediff < (unsigned int) stime){
+	pIvrPython->wakeUpFromSleep.set(false);
+	while((!pIvrPython->wakeUpFromSleep.get()) && (timediff < (unsigned int) stime)){
 	  usleep(10);
 	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
 	  if (evq)
@@ -232,7 +233,8 @@ extern "C" {
 	  unsigned int timediff = 0;
 	timeval tvStart, tvNow;
 	gettimeofday(&tvStart,0);
-	while(timediff < (unsigned int) stime*1000000){
+	pIvrPython->wakeUpFromSleep.set(false);
+	while((!pIvrPython->wakeUpFromSleep.get()) && (timediff < (unsigned int) stime*1000000)){
 	  usleep(10);
  	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
  	  if (evq)
@@ -248,6 +250,18 @@ extern "C" {
 	SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong Arguments!");
       }
     } else {
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
+    }
+  }
+
+  SCRIPT_DECLARE_FUNC(ivrWakeUp) {
+    SCRIPT_DECLARE_VAR;
+    if(pIvrPython != NULL){
+      DBG("IVR: waking up from sleep.\n");
+      pIvrPython->wakeUpFromSleep.set(true);
+      SCRIPT_RETURN_i(1);
+    }   else {
       SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
       SCRIPT_RETURN_NULL;
     }
@@ -552,6 +566,7 @@ void xs_init(pTHX)
 
 	newXS(PY_MOD_NAME"::""sleep", ivrSleep, file);
 	newXS(PY_MOD_NAME"::""usleep", ivrUSleep, file);
+	newXS(PY_MOD_NAME"::""wakeUp", ivrWakeUp, file);
 }
 #endif
 } // end of extern "C"
@@ -656,9 +671,9 @@ void IvrPython::run(){
        // setting callbacks
        {"setCallback", setCallback, METH_VARARGS, "Example Module"},
 
-       {"sleep", ivrSleep, METH_VARARGS, "Example Module"},
-       {"usleep", ivrUSleep, METH_VARARGS, "Example Module"},
-       //       {"exit", ivrExit, METH_VARARGS, "exit this script"},
+       {"sleep", ivrSleep, METH_VARARGS, "Sleep n seconds, or until wakeUp"},
+       {"usleep", ivrUSleep, METH_VARARGS, "Sleep n microseconds, or until wakeUp"},
+       {"wakeUp", ivrWakeUp, METH_VARARGS, "wake Up from sleep"},
        {NULL, NULL, 0, NULL},
      };
 

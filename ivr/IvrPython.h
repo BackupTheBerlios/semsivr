@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.h,v 1.4 2004/06/29 15:50:59 sayer Exp $
+ * $Id: IvrPython.h,v 1.5 2004/07/02 15:01:08 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -23,6 +23,8 @@
 #ifndef IVR_PYTHON_H
 #define IVR_PYTHON_H
 
+#include "AmThread.h"
+#include "AmSession.h"
 #ifndef IVR_PERL
 #include <Python.h>
 #include <compile.h>
@@ -32,8 +34,6 @@
 #include <perl.h>                       /* from the Perl distribution */
 #include <XSUB.h>                       /* from the Perl distribution */
 #endif	//IVR_PERL
-#include "AmThread.h"
-#include "AmSession.h"
 #include "IvrMediaHandler.h"
 #include "IvrDtmfDetector.h"
 #include "Ivr.h"
@@ -118,6 +118,7 @@ class IvrPython : public AmThread, AmEventHandler, IvrEventProducer
 #endif	//IVR_PERL
 
       pthread_t getThreadDescriptor();
+      AmSharedVar<bool> wakeUpFromSleep;
 };
 
 #ifndef IVR_PERL
