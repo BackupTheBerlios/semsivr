@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.cpp,v 1.5 2004/06/22 14:02:11 sayer Exp $
+ * $Id: IvrDtmfDetector.cpp,v 1.6 2004/06/28 19:09:01 rco Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -23,12 +23,13 @@
  *
  */
 
+#include "IvrPython.h"
+#include "IvrDtmfDetector.h"
+#include "IvrMediaHandler.h"
+
 #include <math.h>
 #include <sys/time.h>
 #include "log.h"
-#include "IvrDtmfDetector.h"
-#include "IvrMediaHandler.h"
-#include "IvrPython.h"
 
 // -------------------------------------------------------------------------------------------
 #define IVR_DTMF_ASTERISK 10

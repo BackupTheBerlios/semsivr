@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.h,v 1.5 2004/06/22 14:02:11 sayer Exp $
+ * $Id: IvrDtmfDetector.h,v 1.6 2004/06/28 19:09:01 rco Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -21,9 +21,10 @@
 #ifndef IVR_DTMF_DETECTOR_H
 #define IVR_DTMF_DETECTOR_H
 
-#include <stdio.h>
 #include "Ivr.h" 
 //#include "IvrMediaHandler.h" // for AmAudioIvrInFormat
+
+#include <stdio.h>
 
 class AmAudioIvrInFormat;
 // these are returned if the non number keys are pressed

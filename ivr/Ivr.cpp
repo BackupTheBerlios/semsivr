@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.5 2004/06/22 19:16:47 sayer Exp $
+ * $Id: Ivr.cpp,v 1.6 2004/06/28 19:09:01 rco Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -19,13 +19,13 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "IvrPython.h"
+#include "Ivr.h"
+
 #include "SemsConfiguration.h"
 #include "log.h"
 #include "AmApi.h"
 #include "AmUtils.h"
-
-#include "IvrPython.h"
-#include "Ivr.h"
 
 #include <unistd.h>
 #include <pthread.h>
