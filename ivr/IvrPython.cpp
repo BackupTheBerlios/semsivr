@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.19 2004/07/12 15:21:23 ilk Exp $
+ * $Id: IvrPython.cpp,v 1.20 2004/07/16 10:54:08 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -368,33 +368,33 @@ extern "C" {
   }
 
 
-  /**
-   * Python extension for redirection
-   */
-  SCRIPT_DECLARE_FUNC(ivrRedirect) {
-     SCRIPT_DECLARE_VAR;
-     char* uri;
-
-     if(pIvrPython != NULL){
-       if(SCRIPT_GET_s(uri)){
- 	string refer_to(uri);
- 	SCRIPT_BEGIN_ALLOW_THREADS
- 	  AmCmd refer_cmd = AmRequestUAC::refer(*pIvrPython->pCmd,refer_to);
- 	SCRIPT_END_ALLOW_THREADS
- 	  // was send
+    /**
+     * Python extension for redirection
+     */
+    SCRIPT_DECLARE_FUNC(ivrRedirect) {
+	SCRIPT_DECLARE_VAR;
+	char* uri;
+	
+	if(pIvrPython != NULL){
+	    if(SCRIPT_GET_s(uri)){
+		string refer_to(uri);
+		SCRIPT_BEGIN_ALLOW_THREADS
+		    AmCmd refer_cmd = AmRequestUAC::refer(*pIvrPython->pCmd,refer_to);
+		SCRIPT_END_ALLOW_THREADS
+		    // was send
 // 	  if(pIvrPython->waitForEvent(30000))
 //             SCRIPT_RETURN_i(1);
 //       }
-       // error
+		    // error
 //       DBG("Redirect timeout\n");
-       SCRIPT_RETURN_i(0);
-     }
-     else
-       SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
-    SCRIPT_RETURN_NULL;
-  }
-}
-
+		    SCRIPT_RETURN_i(0);
+	    }
+	    else
+		SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
+	}
+	SCRIPT_RETURN_NULL;  
+    }
+    
 #ifdef IVR_WITH_TTS
 
 SCRIPT_DECLARE_FUNC(ivrSay) {
