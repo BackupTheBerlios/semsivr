@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.1 2004/06/07 13:00:23 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.2 2004/06/07 21:59:37 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -464,9 +464,8 @@ IvrPython::~IvrPython(){
 void IvrPython::run(){
    FILE* fp;
    int retval;
-   
-   pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, 0); // enable cancellation of thread if session is stopped
 
+   pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, 0);
 //   static PyThreadState* pyMainThreadState;
    fp = fopen((char*)fileName,"r");
    if(fp != NULL){
@@ -605,11 +604,6 @@ void IvrPython::onNotify(AmSessionEvent* event) {
 
 void IvrPython::on_stop()
 {
-  //  pthread_cancel(0);
-}
-
-pthread_t IvrPython::getThreadDescriptor() {
-  return 0; //  return _td;
 }
 
 void IvrPython::onDTMFEvent(int detectedKey) {

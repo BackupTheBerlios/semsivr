@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.h,v 1.1 2004/06/07 13:00:23 sayer Exp $
+ * $Id: IvrDtmfDetector.h,v 1.2 2004/06/07 21:59:37 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -26,33 +26,20 @@
 //#include "IvrMediaHandler.h" // for AmAudioIvrInFormat
 
 class AmAudioIvrInFormat;
+// these are returned if the non number keys are pressed
 
-#define NUMBER_OF_SAMPLES        240
+#define DTMF_NPOINTS 93        /* Number of samples for DTMF recognition */
+#define DTMF_SIGNAL_LENGTH_THRESHOLD 2 // dtmf must be longer than or equal to 2*93 samples 
+#define DTMF_WAIT_AFTER_DTMF 10
 
-#define TON1    0    // 350 dialtone 
-#define TON2    1    // 440 ring, dialtone 
-#define TON3    2    // 480 ring, busy 
-#define TON4    3    // 620 busy 
+typedef struct dtmf_state {
+    char last;
+    int  dtmf_signal_length;
+    int  wait_after_dtmf;
+    int idx;
+    int buf[DTMF_NPOINTS];
+} dtmf_state;
 
-#define R1    4    // 697, dtmf row 1 
-#define R2    5    // 770, dtmf row 2 
-#define R3    6    // 852, dtmf row 3 
-#define R4    8    // 941, dtmf row 4 
-#define C1   10    // 1209, dtmf col 1
-#define C2   12    // 1336, dtmf col 2
-#define C3   13    // 1477, dtmf col 3
-#define C4   14    // 1633, dtmf col 4
-
-#define B1    4    // 700, blue box 1 
-#define B2    7    // 900, bb 2 
-#define B3    9    // 1100, bb 3
-#define B4   11    // 1300, bb4
-#define B5   13    // 1500, bb5
-#define B6   15    // 1700, bb6
-#define B7   16    // 2400, bb7
-#define B8   17    // 2600, bb8
-
-#define NUMTONES 14
 
 /* values returned by detect
  *  0-9     DTMF 0 through 9 or MF 0-9
@@ -68,60 +55,35 @@ class AmAudioIvrInFormat;
  *  27      silence
  *  -1      invalid
  */
-#define D0    0
-#define D1    1
-#define D2    2
-#define D3    3
-#define D4    4
-#define D5    5
-#define D6    6
-#define D7    7
-#define D8    8
-#define D9    9
-#define DSTAR 10
-#define DNUM  11
-#define DA    12
-#define DB    13
-#define DC    14
-#define DD    15
-#define DC11  16
-#define DC12  17
-#define DKP1  18
-#define DKP2  19
-#define DST   20
-#define D24   21
-#define D26   22
-#define D2426 23                     
-#define DDT   24
-#define DRING 25
-#define DBUSY 26
-#define DSIL  27
-
-
-#define RANGE  0.1 //0.1           // any thing higher than RANGE*peak is "on"
-#define THRESH 500.0 //100.0        // minimum level for the tone 
-#define FLUSH_TIME 100       // 100 frames = 3 seconds 
-
 typedef unsigned short pcm;    
 
 class IvrDtmfDetector 
 {
  private:
-  // decode numbers from data
-  int decode(pcm* data);
-  // calculates power of each ton according to a goertzel algorithm
-  bool calculate_power(pcm* data, float* power);
-  
+//  void goertzel(pcm *sample, int sample_npoints, int* result);
+
   ivr_dtmf_callback_t DTMFCallback;
   
-  struct DetectorState {
-    int last;
-    int silence_time;
-  };
+/*   struct DetectorState { */
+/*     int last; */
+/*     int silence_time; */
+/*   }; */
   
-  DetectorState dtmfDetectorState;
+/*   DetectorState dtmfDetectorState; */
+
+  dtmf_state *
+    isdn_audio_dtmf_init(dtmf_state * s);
+  void    isdn_audio_goertzel(int *sample, int* result);
+  void    isdn_audio_eval_dtmf(int* result, dtmf_state *s);
+  void    isdn_audio_calc_dtmf(dtmf_state *s, unsigned short *buf, int len, int* result);
+  int max_val;
   IvrPython* parent;
 
+  dtmf_state* state;
+  int result[16];
+
+  bool errorWrongPacketSizePrinted; 
+  FILE* fp;
  public:
   IvrDtmfDetector(IvrPython* parent_);// ivr_dtmf_callback_t onDTMFCallback);
   ~IvrDtmfDetector();

@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.cpp,v 1.1 2004/06/07 13:00:23 sayer Exp $
+ * $Id: IvrDtmfDetector.cpp,v 1.2 2004/06/07 21:59:37 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -30,7 +30,7 @@
 // #define DTMF_TRESH    25000     /* above this is dtmf                         */
 // #define SILENCE_TRESH   200     /* below this is silence                      */
 // #define H2_TRESH      20000     /* 2nd harmonic                               */
-// #define AMP_BITS          9     /* bits per sample, reduced to avoid overflow */
+// #define AMP_BITS          16     /* bits per sample, reduced to avoid overflow */
 // #define LOGRP             0
 // #define HIGRP             1
 
@@ -40,13 +40,25 @@
 // 	int k2;                 /* k fuer 2. harmonic */
 // } dtmf_t;
 
-// /* For DTMF recognition:
-//  * 2 * cos(2 * PI * k / N) precalculated for all k
-//  */
-// static int cos2pik[NCOEFF] =
+// // /* For DTMF recognition:
+// //  * 2 * cos(2 * PI * k / N) precalculated for all k
+// //  */
+// // static int cos2pik[NCOEFF] =
+// // {
+// // 	55812, 29528, 53603, 24032, 51193, 14443, 48590, 6517,
+// // 	38113, -21204, 33057, -32186, 25889, -45081, 18332, -55279
+// // };
+// //
+// // see gen_constants/gen_constants.c for the calculation of these 
+// static int cos2pik_240[16] = 
 // {
-// 	55812, 29528, 53603, 24032, 51193, 14443, 48590, 6517,
-// 	38113, -21204, 33057, -32186, 25889, -45081, 18332, -55279
+//     58392,   38520,   56755,   34242,   54963,   26655,   53019,   20251,  
+//     45111,   -3430,   41243,   -13626,   35693,   -26656,   29752,   -38520  
+// };
+// static int cos2pik_160[16] = 
+// {
+//     49833,   10251,   46340,   2573,   42562,   -10252,   38521,   -20252,  
+//     22683,   -49833,   15299,   -58392,   5142,   -64728,   -5142,   -64728  
 // };
 
 // static dtmf_t dtmf_tones[8] =
@@ -61,25 +73,35 @@
 // 	{HIGRP, 14, 15}         /* 1633 Hz */
 // };
 
-// static char dtmf_matrix[4][4] =
+// // returns these values
+// static int dtmf_matrix[4][4] =
 // {
-// 	{'1', '2', '3', 'A'},
-// 	{'4', '5', '6', 'B'},
-// 	{'7', '8', '9', 'C'},
-// 	{'*', '0', '#', 'D'}
+//     {                1, 2, 3,             IVR_DTMF_A},
+//     {                4, 5, 6,             IVR_DTMF_B},
+//     {                7, 8, 9,             IVR_DTMF_C},
+//     {IVR_DTMF_ASTERISK, 0, IVR_DTMF_HASH, IVR_DTMF_D}
 // };
 
-// dtmf_state *
-// isdn_audio_dtmf_init(dtmf_state * s)
+
+ 
+// float coeff[] = { 
+//    1.7077378035, 1.6452810764, 1.5686869621, 1.4782046080, 1.1641039848, 0.9963701963, 0.7986183763,
+//    0.9164258242, 0.7070164084, 0.4608556628, 0.1851755679, -0.6447557807, -1.0071394444, -1.3621084690
+// };
+
+// IvrDtmfDetector::IvrDtmfDetector(IvrPython* parent_) //ivr_dtmf_callback_t onDTMFCallback)
+//     : /*DTMFCallback(onDTMFCallback),*/ parent(parent_), errorWrongPacketSizePrinted(false)
 // {
-// 	if (!s)
-// 		s = (dtmf_state *) kmalloc(sizeof(dtmf_state), GFP_ATOMIC);
-// 	if (s) {
-// 		s->idx = 0;
-// 		s->last = ' ';
-// 	}
-// 	return s;
+//   dtmfDetectorState.last = -1;
+//   dtmfDetectorState.silence_time = 0;
+//   fp = fopen("/tmp/dtmf.raw", "w");
 // }
+
+// IvrDtmfDetector::~IvrDtmfDetector()
+// {
+//     fclose(fp);
+// }
+
 // /*
 //  * Goertzel algorithm.
 //  * See http://ptolemy.eecs.berkeley.edu/~pino/Ptolemy/papers/96/dtmf_ict/
@@ -87,274 +109,394 @@
 //  * Result is stored into an sk_buff and queued up for later
 //  * evaluation.
 //  */
-// static void
-// isdn_audio_goertzel(int *sample, modem_info * info)
+// void IvrDtmfDetector::goertzel(pcm *sample, int sample_npoints, int* result)
 // {
-// 	int sk,
-// 	 sk1,
-// 	 sk2;
-// 	int k,
-// 	 n;
-// 	struct sk_buff *skb;
-// 	int *result;
+//     int sk,
+// 	sk1,
+// 	sk2;
+//     int k,
+// 	n;
 
-// 	skb = dev_alloc_skb(sizeof(int) * NCOEFF);
-// 	if (!skb) {
-// 		printk(KERN_WARNING
-// 		  "isdn_audio: Could not alloc DTMF result for ttyI%d\n",
-// 		       info->line);
-// 		return;
+//     int* cos2pik = cos2pik_160; // default packet size
+//     if (sample_npoints == 240)   // otherwise use the other constants
+// 	cos2pik = cos2pik_240;
+    
+// //     int buf[240];
+// //     for (int i=0;i<sample_npoints;i++) // convert to int...
+// // 	buf[i] = (sample[i] - (1 << 15)) << 1;
+
+// //     printf("\nsamples: ");
+// //     for (int i=0;i<10;i++) {
+// // 	printf("%d ",sample[i]);
+// //     }
+
+// //     printf("\nbuf: ");
+// //     for (int i=0;i<10;i++) {
+// // 	printf("%d ",buf[i]);
+// //     }
+// //     printf("\n");
+//     int* buf = (int*)sample;
+//     for (k = 0; k < NCOEFF; k++) {
+// 	sk = sk1 = sk2 = 0;
+// 	for (n = 0; n < sample_npoints; n++) {
+// 	    sk = buf[n] + ((cos2pik[k] * sk1) >> 15) - sk2;
+// 	    sk2 = sk1;
+// 	    sk1 = sk;
 // 	}
-// 	result = (int *) skb_put(skb, sizeof(int) * NCOEFF);
-// 	for (k = 0; k < NCOEFF; k++) {
-// 		sk = sk1 = sk2 = 0;
-// 		for (n = 0; n < DTMF_NPOINTS; n++) {
-// 			sk = sample[n] + ((cos2pik[k] * sk1) >> 15) - sk2;
-// 			sk2 = sk1;
-// 			sk1 = sk;
-// 		}
-// 		result[k] =
-// 		    ((sk * sk) >> AMP_BITS) -
-// 		    ((((cos2pik[k] * sk) >> 15) * sk2) >> AMP_BITS) +
-// 		    ((sk2 * sk2) >> AMP_BITS);
-// 	}
-// 	skb_queue_tail(&info->dtmf_queue, skb);
-// 	isdn_timer_ctrl(ISDN_TIMER_MODEMREAD, 1);
+// 	result[k] =
+// 	    ((sk * sk) >> AMP_BITS) -
+// 	    ((((cos2pik[k] * sk) >> 15) * sk2) >> AMP_BITS) +
+// 	    ((sk2 * sk2) >> AMP_BITS);
+//     }
 // }
 
-// void
-// isdn_audio_eval_dtmf(modem_info * info)
+// int IvrDtmfDetector::streamPut(unsigned char* samples, unsigned int size, unsigned int user_ts)
 // {
-// 	struct sk_buff *skb;
-// 	int *result;
-// 	dtmf_state *s;
-// 	int silence;
-// 	int i;
-// 	int di;
-// 	int ch;
-// 	unsigned long flags;
-// 	int grp[2];
-// 	char what;
-// 	char *p;
+// //   // *TODO: check user_ts and dropped packets!
+// //   if ((mediaInFormat->channels != 1)||(mediaInFormat->rate != 8000)||(mediaInFormat->sample != 2)) {
+// //     //*TODO support rescaling, channels ...
+// //     ERROR("resampling or scaling of input data to DTMF decoder not supported yet!\n");
+// //     return -1;
+// //   }
+  
+//     fwrite(samples, 1, size, fp);
 
-// 	while ((skb = skb_dequeue(&info->dtmf_queue))) {
-// 		result = (int *) skb->data;
-// 		s = info->dtmf_state;
-// 		grp[LOGRP] = grp[HIGRP] = -2;
-// 		silence = 0;
-// 		for (i = 0; i < 8; i++) {
-// 			if ((result[dtmf_tones[i].k] > DTMF_TRESH) &&
-// 			    (result[dtmf_tones[i].k2] < H2_TRESH))
-// 				grp[dtmf_tones[i].grp] = (grp[dtmf_tones[i].grp] == -2) ? i : -1;
-// 			else if ((result[dtmf_tones[i].k] < SILENCE_TRESH) &&
-// 			      (result[dtmf_tones[i].k2] < SILENCE_TRESH))
-// 				silence++;
-// 		}
-// 		if (silence == 8)
-// 			what = ' ';
-// 		else {
-// 			if ((grp[LOGRP] >= 0) && (grp[HIGRP] >= 0)) {
-// 				what = dtmf_matrix[grp[LOGRP]][grp[HIGRP] - 4];
-// 				if (s->last != ' ' && s->last != '.')
-// 					s->last = what;	/* min. 1 non-DTMF between DTMF */
-// 			} else
-// 				what = '.';
-// 		}
-// 		if ((what != s->last) && (what != ' ') && (what != '.')) {
-// 			printk(KERN_DEBUG "dtmf: tt='%c'\n", what);
-// 			p = skb->data;
-// 			*p++ = 0x10;
-// 			*p = what;
-// 			skb_trim(skb, 2);
-// 			if (skb_headroom(skb) < sizeof(isdn_audio_skb)) {
-// 				printk(KERN_WARNING
-// 				       "isdn_audio: insufficient skb_headroom, dropping\n");
-// 				kfree_skb(skb);
-// 				return;
-// 			}
-// 			ISDN_AUDIO_SKB_DLECOUNT(skb) = 0;
-// 			ISDN_AUDIO_SKB_LOCK(skb) = 0;
-// 			save_flags(flags);
-// 			cli();
-// 			di = info->isdn_driver;
-// 			ch = info->isdn_channel;
-// 			__skb_queue_tail(&dev->drv[di]->rpqueue[ch], skb);
-// 			dev->drv[di]->rcvcount[ch] += 2;
-// 			restore_flags(flags);
-// 			/* Schedule dequeuing */
-// 			if ((dev->modempoll) && (info->rcvsched))
-// 				isdn_timer_ctrl(ISDN_TIMER_MODEMREAD, 1);
-// 			wake_up_interruptible(&dev->drv[di]->rcv_waitq[ch]);
-// 		} else
-// 			kfree_skb(skb);
-// 		s->last = what;
+//     if (( size != 160*sizeof(pcm) ) && ( size != 240*sizeof(pcm))) {
+// 	if (!errorWrongPacketSizePrinted) {
+// 	    ERROR("IvrDtmfDetector only support packet size 30 ms and 20 ms.\n");
+// 	    errorWrongPacketSizePrinted = true; // only print err msg once
 // 	}
-// }
- 
-// /*
-//  * Decode DTMF tones, queue result in separate sk_buf for
-//  * later examination.
-//  * Parameters:
-//  *   s    = pointer to state-struct.
-//  *   buf  = input audio data
-//  *   len  = size of audio data.
-//  *   fmt  = audio data format (0 = ulaw, 1 = alaw)
-//  */
-// void
-// isdn_audio_calc_dtmf(modem_info * info, unsigned char *buf, int len, int fmt)
-// {
-// 	dtmf_state *s = info->dtmf_state;
-// 	isdn_audio_goertzel(s->buf, info);
+//  	return -1;
+//     }
+
+//     // calculate the power of the selected frequencies
+//     int result[NCOEFF];
+//     for (int i=0;i<NCOEFF;i++)
+// 	result[i]=0;
+//     goertzel((pcm*)samples, size/sizeof(pcm), result); 
+    
+//     printf("--%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d --\n", 
+// 	   result[0],
+// 	   result[1],
+// 	   result[2],
+// 	   result[3],
+// 	   result[4],
+// 	   result[5],
+// 	   result[6],
+// 	   result[7],
+// 	   result[8],
+// 	   result[9],
+// 	   result[10],
+// 	   result[11],
+// 	   result[12],
+// 	   result[13],
+// 	   result[14],
+// 	   result[15]
+// 	   );
 	
+//     int silence = 0;
+//     int grp[2];
+//     int what;
+        
+//     grp[LOGRP] = grp[HIGRP] = -2;
+//     silence = 0;
+//     for (int i = 0; i < 8; i++) {
+// 	if ((result[dtmf_tones[i].k] > DTMF_TRESH) &&
+// 	    (result[dtmf_tones[i].k2] < H2_TRESH))
+// 	    grp[dtmf_tones[i].grp] = (grp[dtmf_tones[i].grp] == -2) ? i : -1;
+// 	else if ((result[dtmf_tones[i].k] < SILENCE_TRESH) &&
+// 		 (result[dtmf_tones[i].k2] < SILENCE_TRESH))
+// 	    silence++;
+//     }
+//     if (silence == 8)
+// 	what = -1;
+//     else {
+// 	if ((grp[LOGRP] >= 0) && (grp[HIGRP] >= 0)) {
+// 	    what = dtmf_matrix[grp[LOGRP]][grp[HIGRP] - 4];
+// 	    if (dtmfDetectorState.last != -1 && dtmfDetectorState.last != -2)
+// 		dtmfDetectorState.last = what;	/* min. 1 non-DTMF between DTMF */
+// 	} else
+// 	    what = -2;
+//     }
+//     if ((what != dtmfDetectorState.last) && (what != -1) && (what != -2)) {
+// 	DBG("dtmf: tt='%c'\n", what);
+// 	parent->onDTMFEvent(what);
+//     } else {
+// 	dtmfDetectorState.last = what;
+//     }
+    
+//     return size;
 // }
 
 
-float coeff[] = { 
-   1.7077378035, 1.6452810764, 1.5686869621, 1.4782046080, 1.1641039848, 0.9963701963, 0.7986183763,
-   0.9164258242, 0.7070164084, 0.4608556628, 0.1851755679, -0.6447557807, -1.0071394444, -1.3621084690
+    
+// -------------------------------------------------------------------------------------------
+#define IVR_DTMF_ASTERISK 10
+#define IVR_DTMF_HASH     11
+#define IVR_DTMF_A        12
+#define IVR_DTMF_B        13 
+#define IVR_DTMF_C        14 
+#define IVR_DTMF_D        15
+/* // returns these values */
+
+static int IVR_dtmf_matrix[4][4] =
+{
+    {                1, 2, 3,             IVR_DTMF_A},
+    {                4, 5, 6,             IVR_DTMF_B},
+    {                7, 8, 9,             IVR_DTMF_C},
+    {IVR_DTMF_ASTERISK, 0, IVR_DTMF_HASH, IVR_DTMF_D}
 };
 
-IvrDtmfDetector::IvrDtmfDetector(IvrPython* parent_) //ivr_dtmf_callback_t onDTMFCallback)
-  : /*DTMFCallback(onDTMFCallback),*/ parent(parent_)
+
+#define NCOEFF            8     /* number of frequencies to be analyzed       */
+#define DTMF_TRESH     4000     /* above this is dtmf                         */
+#define SILENCE_TRESH   200     /* below this is silence                      */
+#define AMP_BITS          9     /* bits per sample, reduced to avoid overflow */
+#define LOGRP             0
+#define HIGRP             1
+
+typedef struct {
+	int grp;                /* low/high group     */
+	int k;                  /* k                  */
+	int k2;                 /* k fuer 2. harmonic */
+} dtmf_t;
+
+/* For DTMF recognition:
+ * 2 * cos(2 * PI * k / N) precalculated for all k
+ */
+static int cos2pik[NCOEFF] =
 {
-  dtmfDetectorState.last = DSIL;
-  dtmfDetectorState.silence_time = 0;
+    55813, 53604, 51193, 48591,      // low group
+    38114, 33057, 25889, 18332       // high group
+};
+
+static dtmf_t dtmf_tones[8] =
+{
+	{LOGRP, 0, 1},          /*  697 Hz */
+	{LOGRP, 2, 3},          /*  770 Hz */
+	{LOGRP, 4, 5},          /*  852 Hz */
+	{LOGRP, 6, 7},          /*  941 Hz */
+	{HIGRP, 8, 9},          /* 1209 Hz */
+	{HIGRP, 10, 11},        /* 1336 Hz */
+	{HIGRP, 12, 13},        /* 1477 Hz */
+	{HIGRP, 14, 15}         /* 1633 Hz */
+};
+
+static char dtmf_matrix[4][4] =
+{
+	{'1', '2', '3', 'A'},
+	{'4', '5', '6', 'B'},
+	{'7', '8', '9', 'C'},
+	{'*', '0', '#', 'D'}
+};
+
+dtmf_state *
+IvrDtmfDetector::isdn_audio_dtmf_init(dtmf_state * s)
+{
+	if (!s)
+		s = (dtmf_state *) malloc(sizeof(dtmf_state));
+	if (s) {
+		s->idx = 0;
+		s->last = ' ';
+		s->wait_after_dtmf = 0;
+		s->dtmf_signal_length = 0;
+	}
+	return s;
 }
 
-IvrDtmfDetector::~IvrDtmfDetector()
+/*
+ * Goertzel algorithm.
+ * See http://ptolemy.eecs.berkeley.edu/~pino/Ptolemy/papers/96/dtmf_ict/
+ * for more info.
+ */
+void
+IvrDtmfDetector::isdn_audio_goertzel(int *sample, int* result)
 {
-}
+	int sk,
+	 sk1,
+	 sk2;
+	int k,
+	 n;
 
-bool IvrDtmfDetector::calculate_power(pcm* data, float* power)
-{
-  float u0[NUMTONES],u1[NUMTONES],t,in;
-  int i,j;
-  const pcm middle = 1<<(sizeof(pcm)*8 -1);
-  for(j=0; j<NUMTONES; j++) {
-    u0[j] = 0.0;
-    u1[j] = 0.0;
-  }
-  for(i=0; i<NUMBER_OF_SAMPLES; i++) {   
-    in = (float)data[i] / (float)middle; //for signed char 128.0;
-    for(j=0; j<NUMTONES; j++) {
-      t = u0[j];
-      u0[j] = in + coeff[j] * u0[j] - u1[j];
-      u1[j] = t;
-    }
-  }
-  for(j=0; j<NUMTONES; j++)  
-    power[j] = u0[j] * u0[j] + u1[j] * u1[j] - coeff[j] * u0[j]* u1[j];
-  return(0);
-}
-
-
-int IvrDtmfDetector::decode(pcm *data)
-{
-  float power[NUMTONES],thresh,thresh2nd,maxpower;
-  int on[NUMTONES/2],on_count;
-  int rcount, ccount;
-  int row, col,i;
-  int r[4],c[3];
-
-  calculate_power(data,power);
-  for(i=0, maxpower=0.0; i<NUMTONES;i++){
-    if(power[i] > maxpower)
-      maxpower = power[i];
-      //printf("%f***", power[i]);
-  }
-  //printf("\n");
-  if(maxpower < THRESH){  /* silence? */
-    //DBG("Real silence %f \n", maxpower);
-    return(DSIL);
-  }
-  thresh = RANGE * maxpower;    /* allowable range of powers */
-  thresh2nd = thresh/20;
-  for(i=0, on_count=0; i<NUMTONES/2; i++) {
-    if(power[i] > thresh && power[i+NUMTONES/2]> thresh2nd) {    /* proof if frequence and its 2nd harmonic present*/
-      on[i] = 1;
-      on_count ++;
-      //DBG("%i\n", i);
-    } else
-      on[i] = 0;
-  }
-
-  if(on_count == 2) {
-/*    if(on[TON1] && on[TON2])
-      return(DDT);
-    if(on[TON2] && on[TON3])
-      return(DRING);
-    if(on[TON3] && on[TON4])
-      return(DBUSY);
+	for (k = 0; k < NCOEFF; k++) {
+		sk = sk1 = sk2 = 0;
+		for (n = 0; n < DTMF_NPOINTS; n++) {
+			sk = sample[n] + ((cos2pik[k] * sk1) >> 15) - sk2;
+			sk2 = sk1;
+			sk1 = sk;
+		}
+		/* Avoid overflows */
+		sk >>= 1;
+		sk2 >>= 1;
+		/* compute |X(k)|**2 */
+		/* report overflows. This should not happen. */
+		/* Comment this out if desired */
+		/*if (sk < -32768 || sk > 32767)
+			DBG("isdn_audio: dtmf goertzel overflow, sk=%d\n", sk);
+		if (sk2 < -32768 || sk2 > 32767)
+		    DBG("isdn_audio: dtmf goertzel overflow, sk2=%d\n", sk2);
 */
-    //c[0]= on[C1]; c[1]= on[C2]; c[2]= on[C3]; 
-    //r[0]= on[R1]; r[1]= on[R2]; r[2]= on[R3]; r[3]= on[R4];
-    c[0]=on[4]; c[1]=on[5]; c[2]= on[6];
-    r[0]= on[0]; r[1]= on[1]; r[2]= on[2]; r[3]= on[3];
 
-    for(i=0, rcount=0; i<4; i++) {
-      if(r[i]) {
-        rcount++;
-        row = i;
-      }
-    }
-    for(i=0, ccount=0; i<3; i++) {
-      if(c[i]) {
-        ccount++;
-        col = i;
-      }
-    }
-    if(rcount==1 && ccount==1) {   //DTMF
-        if(row == 3 && col == 0 )
-           return(DSTAR);
-        if(row == 3 && col == 2 )
-           return(DNUM);
-        if(row == 3)
-           return(D0);
-        if(row == 0 && col == 2) {   /* DTMF 3 conflicts with MF 7 */
-            return(D3);
-        } else
-          return(D1 + col + row*3);
-    }
-    return(-1);
-  }
-  if(on_count == 0)
-    return(DSIL);
-  return(-1);
+		result[k] =
+		    ((sk * sk) >> AMP_BITS) -
+		    ((((cos2pik[k] * sk) >> 15) * sk2) >> AMP_BITS) +
+		    ((sk2 * sk2) >> AMP_BITS);
+	}
 }
+
+void
+IvrDtmfDetector::isdn_audio_eval_dtmf(int* result, dtmf_state *s)
+{
+    int silence;
+    int i;
+    int grp[2];
+    char what;
+    int IVR_what;
+    int thresh;
+
+    grp[LOGRP] = grp[HIGRP] = -1;
+    silence = 0;
+    thresh = 0;
+
+    for (i = 0; i < NCOEFF; i++) {
+	if (result[i] > DTMF_TRESH) {
+	    if (result[i] > thresh)
+		thresh = result[i];
+	}
+	else if (result[i] < SILENCE_TRESH)
+	    silence++;
+    }
+    if (silence == NCOEFF)
+	what = ' ';
+    else {
+	if (thresh > 0)	{
+	    thresh = thresh >> 4;  /* touchtones must match within 12 dB */
+	    for (i = 0; i < NCOEFF; i++) {
+		if (result[i] < thresh)
+		    continue;  /* ignore */
+		
+		/* good level found. This is allowed only one time per group */
+		if (i < NCOEFF / 2) {
+		    /* lowgroup*/
+		    if (grp[LOGRP] >= 0) {
+			// Bad. Another tone found. */
+			grp[LOGRP] = -1;
+			break;
+		    }
+		    else
+			grp[LOGRP] = i;
+		}
+		else { /* higroup */
+		    if (grp[HIGRP] >= 0) { // Bad. Another tone found. */
+			grp[HIGRP] = -1;
+			break;
+		    }
+		    else
+			grp[HIGRP] = i - NCOEFF/2;
+		}
+	    }
+
+	    if ((grp[LOGRP] == 1) && (grp[HIGRP] == -1)) { // fix for 4: 4 and 7 over thresh
+		if ((result[4]>=thresh)&&(result[7]>=thresh) && ((result[4] >> 2) > result[7])) {
+		    grp[HIGRP] = 0;
+		}
+	    }
+
+	    if ((grp[LOGRP] >= 0) && (grp[HIGRP] >= 0)) {
+		what = dtmf_matrix[grp[LOGRP]][grp[HIGRP]];
+		IVR_what = IVR_dtmf_matrix[grp[LOGRP]][grp[HIGRP] - 4];
+		
+		
+		if (what == s->last) // current signal continued
+		    s->dtmf_signal_length++;
+		else { // signal change
+		    s->dtmf_signal_length = 0;
+		    if ((s->last != ' ')&&(s->last != '.')) { // no non-DTMF between this and the last DTMF
+			what = '.';
+			s->last = '.';
+		    }
+		}
+		if (s->dtmf_signal_length && (what != '.')&& (what!=' ')) {
+		    DBG("DTMF signal length = %d.\n",s->dtmf_signal_length);
+		}
+	    } else
+		what = '.';
+	}
+	else
+	    what = '.';
+    }
+    if ((what != ' ') && (what != '.') && (s->dtmf_signal_length >= DTMF_SIGNAL_LENGTH_THRESHOLD)) {
+	if (!s->wait_after_dtmf) {
+	    DBG("dtmf: tt='%c'\n", what);
+	    s->wait_after_dtmf = DTMF_WAIT_AFTER_DTMF; // skip next three blocks (3*NPOINTS == 3*93 == 35 ms)
+	    parent->onDTMFEvent(IVR_what);    
+	}
+	
+    } 
+    s->last = what;
+//    DBG("%c",what);
+    if (s->wait_after_dtmf) {
+	s->wait_after_dtmf--;
+//	DBG("s->wait_after_dtmf is now %d\n", s->wait_after_dtmf);
+    }
+}
+
+/*
+ * Decode DTMF tones, queue result in separate sk_buf for
+ * later examination.
+ * Parameters:
+ *   s    = pointer to state-struct.
+ *   buf  = input audio data
+ *   len  = size of audio data.
+ *   fmt  = audio data format (0 = ulaw, 1 = alaw)
+ */
+void
+IvrDtmfDetector::isdn_audio_calc_dtmf(dtmf_state *s, unsigned short *buf, int len, int* result)
+{
+    int i;
+    int c;
+    
+    while (len) {
+//	c = min(len, (DTMF_NPOINTS - s->idx));
+	if (len<(DTMF_NPOINTS - s->idx))
+	    c = len;
+	else
+	    c = (DTMF_NPOINTS - s->idx);
+	
+	if (c <= 0)
+	    break;
+	for (i = 0; i < c; i++) {
+	    s->buf[s->idx++] = 
+		((*buf++) -  (1 << 15)) >> (15 - AMP_BITS);
+	    
+	}
+	if (s->idx == DTMF_NPOINTS) {
+	    isdn_audio_goertzel(s->buf, result);
+	    // for (i=0;i<16;i++)
+// 		printf("%7d ", result[i]);	    
+// 	    printf ("\n");
+	    s->idx = 0;
+	    isdn_audio_eval_dtmf(result, s);
+	}
+	len -= c;
+    }
+}
+
 
 int IvrDtmfDetector::streamPut(unsigned char* samples, unsigned int size, unsigned int user_ts)
 {
-//   // *TODO: check user_ts and dropped packets!
-//   if ((mediaInFormat->channels != 1)||(mediaInFormat->rate != 8000)||(mediaInFormat->sample != 2)) {
-//     //*TODO support rescaling, channels ...
-//     ERROR("resampling or scaling of input data to DTMF decoder not supported yet!\n");
-//     return -1;
-//   }
-  
-  if ( size < NUMBER_OF_SAMPLES*sizeof(pcm)){
-      ERROR("IvrDtmfDetector::streamPut: frame is too small:%d ( <240 samples)",size/sizeof(pcm));
-      return -1;
-  }
-  int x = decode((pcm*)samples);
-  if(x >= 0) {
-    if(x == DSIL)
-      dtmfDetectorState.silence_time += (dtmfDetectorState.silence_time>=0)?1:0 ;
-    else
-      dtmfDetectorState.silence_time= 0;
-    if(dtmfDetectorState.silence_time == FLUSH_TIME) {
-      dtmfDetectorState.silence_time= -1; // stops counting 
-    }
-    if(x != DSIL && x != dtmfDetectorState.last &&
-       (dtmfDetectorState.last == DSIL || dtmfDetectorState.last==D24 || dtmfDetectorState.last == D26 ||
-	dtmfDetectorState.last == D2426 || dtmfDetectorState.last == DDT || dtmfDetectorState.last == DBUSY ||
-	dtmfDetectorState.last == DRING) )  {
-      // valid DTMF detected! 
-      //DTMFCallback(x);
-      parent->onDTMFEvent(x);
-    }
-    dtmfDetectorState.last  = x;
-  }
-  return size;
+    isdn_audio_calc_dtmf(state, (unsigned short *)samples, size/2, result);
+    return size;
 }
 
+ IvrDtmfDetector::IvrDtmfDetector(IvrPython* parent_) //ivr_dtmf_callback_t onDTMFCallback)
+     : /*DTMFCallback(onDTMFCallback),*/ parent(parent_), errorWrongPacketSizePrinted(false)
+ {
+     state = 0;
+     state = isdn_audio_dtmf_init(state);
+     max_val = 0;
+ }
 
+ IvrDtmfDetector::~IvrDtmfDetector()
+ {
+ }
