@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.8 2004/06/30 10:03:21 sayer Exp $
+ * $Id: Ivr.cpp,v 1.9 2004/07/01 11:39:34 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -204,7 +204,7 @@ void IvrDialog::onSessionStart(AmRequest* req){
 
 #ifdef IVR_PERL
   scriptEventP->stop();
-  AmThreadWatcher::instance()->add(scriptEventP.get());
+  // AmThreadWatcher::instance()->add(scriptEventP.get());
 #endif
    
   if(!getSession()->sess_stopped.get())
