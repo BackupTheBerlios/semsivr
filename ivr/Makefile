@@ -1,6 +1,8 @@
 plug_in_name = ivr
 
-PYTHON_VERSION = 2.2
+# PYTHON_VERSION might also be 2.2
+# do a ls /usr/include/python2.3/Python.h to see if it's there
+PYTHON_VERSION = 2.3
 # adjust to point to python include path
 # can also be /usr/include/python$(PYTHON_VERSION)
 # look for Python.h in the specified path
