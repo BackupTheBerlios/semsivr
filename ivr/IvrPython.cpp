@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.16 2004/07/06 09:17:14 zrichard Exp $
+ * $Id: IvrPython.cpp,v 1.17 2004/07/09 10:53:51 ilk Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -193,8 +193,8 @@ extern "C" {
     if(pIvrPython != NULL){
       if(SCRIPT_GET_i(stime)){
 	DBG("IVR: sleeping %d useconds.\n", stime);
+	int timediff = 0;
 	SCRIPT_BEGIN_ALLOW_THREADS
-	  int timediff = 0;
 	timeval tvStart, tvNow;
 	gettimeofday(&tvStart,0);
 	pIvrPython->wakeUpFromSleep.set(false);
@@ -227,8 +227,8 @@ extern "C" {
     if(pIvrPython != NULL){
       if(SCRIPT_GET_i(stime)){
 	DBG("IVR: sleeping %d mseconds.\n", stime);
-	SCRIPT_BEGIN_ALLOW_THREADS
 	  int timediff = 0;
+	SCRIPT_BEGIN_ALLOW_THREADS
 	timeval tvStart, tvNow;
 	gettimeofday(&tvStart,0);
 	pIvrPython->wakeUpFromSleep.set(false);
