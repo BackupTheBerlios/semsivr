@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.15 2004/08/10 10:39:05 sayer Exp $
+ * $Id: Ivr.cpp,v 1.16 2004/08/10 12:13:40 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -46,76 +46,92 @@ IvrFactory:: IvrFactory(const string& _app_name)
  * Loads python script path and default script file from configuration file
  */
 int IvrFactory::onLoad(){
-	if(mIvrConfig.reloadModuleConfig(MOD_NAME) == 1){
+    if(mIvrConfig.reloadModuleConfig(MOD_NAME) == 1){
       char* pSF = 0;
       int flagpythonScriptPath = 0, flagdefaultPythonScriptFile = 0;
       if(((pSF = mIvrConfig.getValueForKey("python_script_path")) != NULL) && ( *pSF != '\0') ){
-         setenv("PYTHONPATH",pSF,0);
-         pythonScriptPath = pSF;
-         flagpythonScriptPath = 1;
-         if(pythonScriptPath.rfind('/') != pythonScriptPath.length() - 1)
-            pythonScriptPath += "/";
+	setenv("PYTHONPATH",pSF,0);
+	pythonScriptPath = pSF;
+	flagpythonScriptPath = 1;
+	if(pythonScriptPath.rfind('/') != pythonScriptPath.length() - 1)
+	  pythonScriptPath += "/";
       }
-//		else {
-//         pythonScriptPath = "/";
-//			WARN("no python_script_path in configuration\n");
-//		}
-		if(((pSF = mIvrConfig.getValueForKey("python_script_file")) != NULL) && ( *pSF != '\0') ){
-         defaultPythonScriptFile = pSF;
-         flagdefaultPythonScriptFile = 1;
-//         return 0;
+      if(((pSF = mIvrConfig.getValueForKey("python_script_file")) != NULL) && ( *pSF != '\0') ){
+	defaultPythonScriptFile = pSF;
+	flagdefaultPythonScriptFile = 1;
+
       }
-//		else {
-//			WARN("no python_script_file in configuration\n");
-//			return -1;
-//		}
-
-	if(((pSF = mIvrConfig.getValueForKey("ivr_script_path")) != NULL) && ( *pSF != '\0') ){
-		setenv("PYTHONPATH",pSF,0);
-		pythonScriptPath = pSF;
-		if(pythonScriptPath.rfind('/') != pythonScriptPath.length() - 1)
-			pythonScriptPath += "/";
-	} else {
-		if (flagpythonScriptPath == 0) {
-			pythonScriptPath = "/";
-			WARN("no ivr_script_path in configuration\n");
-		}
+      if(((pSF = mIvrConfig.getValueForKey("ivr_script_path")) != NULL) && ( *pSF != '\0') ){
+	setenv("PYTHONPATH",pSF,0);
+	pythonScriptPath = pSF;
+	if(pythonScriptPath.rfind('/') != pythonScriptPath.length() - 1)
+	  pythonScriptPath += "/";
+      } else {
+	if (flagpythonScriptPath == 0) {
+	  pythonScriptPath = "./";
+	  WARN("no ivr_script_path in configuration\n");
 	}
+      }
 
-	if(((pSF = mIvrConfig.getValueForKey("ivr_script_file")) != NULL) && ( *pSF != '\0') ){
-		defaultPythonScriptFile = pSF;
-         return 0;
-	} else {
-		if (flagdefaultPythonScriptFile == 0) {
-			WARN("no ivr_script_file in configuration\n");
-			return -1;
-		}
+      if(((pSF = mIvrConfig.getValueForKey("ivr_script_file")) != NULL) && ( *pSF != '\0') ){
+	defaultPythonScriptFile = pSF;
+	
+      } else {
+	if (flagdefaultPythonScriptFile == 0) {
+	  WARN("no ivr_script_file in configuration\n");
+#ifndef IVR_PERL
+	  defaultPythonScriptFile = "ivr.py";
+#else 
+	  defaultPythonScriptFile = "ivr.pl";
+#endif
 	}
+      }
 
 #ifdef IVR_WITH_TTS
-		char* p =0;
-    if( ((p = mIvrConfig.getValueForKey("tts_caching")) != NULL) && (*p != '\0') ) {
-      tts_caching = ((*p=='y') || (*p=='Y'));
-    } else {
-      WARN("no tts_caching (y/n) specified in configuration\n");
-      WARN("file for module ivr.\n");
-      tts_caching = true;
-    }
+      char* p =0;
+      if( ((p = mIvrConfig.getValueForKey("tts_caching")) != NULL) && (*p != '\0') ) {
+	tts_caching = ((*p=='y') || (*p=='Y'));
+      } else {
+	WARN("no tts_caching (y/n) specified in configuration\n");
+	WARN("file for module ivr.\n");
+	tts_caching = true;
+      }
 
-    if( ((p = mIvrConfig.getValueForKey("tts_cache_path")) != NULL) && (*p != '\0') )
-      tts_cache_path = p;
-    else {
-      WARN("no cache_path specified in configuration\n");
-      WARN("file for module semstalkflite.\n");
-      tts_cache_path  = CACHE_PATH;
-    }
-    if( !tts_cache_path.empty()
-	&& tts_cache_path[tts_cache_path.length()-1] != '/' )
-      tts_cache_path += "/";
+      if( ((p = mIvrConfig.getValueForKey("tts_cache_path")) != NULL) && (*p != '\0') )
+	tts_cache_path = p;
+      else {
+	WARN("no cache_path specified in configuration\n");
+	WARN("file for module semstalkflite.\n");
+	tts_cache_path  = CACHE_PATH;
+      }
+      if( !tts_cache_path.empty()
+	  && tts_cache_path[tts_cache_path.length()-1] != '/' )
+	tts_cache_path += "/";
+#endif
+    } // success loading configuration
+
+    DBG("** IVR compile time configuration:\n");
+#ifndef IVR_PERL
+    DBG("**     built with PYTHON support.\n");
+#else 
+    DBG("**     built with PERL support.\n");
 #endif
 
-   }
-	return 0;
+#ifdef IVR_WITH_TTS
+    DBG("**     Text-To-Speech enabled\n");
+#else
+    DBG("**     Text-To-Speech disabled\n");
+#endif
+
+    DBG("** IVR run time configuration:\n");
+    DBG("**     script path:         \'%s\'\n", pythonScriptPath.c_str());
+    DBG("**     default script file: \'%s\'\n", defaultPythonScriptFile.c_str());
+#ifdef IVR_WITH_TTS
+    DBG("**     TTS caching:          %s\n", tts_caching ? "yes":"no");
+    DBG("**     TTS cache path:      \'%s\'\n", tts_cache_path.c_str());
+#endif // IVR_WITH_TTS
+
+    return 0;
 }
 
 /**

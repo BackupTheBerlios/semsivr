@@ -6,25 +6,19 @@ plug_in_name = ivr
 #
 # PYTHON_VERSION might also be 2.2
 # do a ls /usr/include/python2.3/Python.h to see if it's there
-PYTHON_VERSION = 2.3
+PYTHON_VERSION = 2.2
 # adjust to point to python include path
 # can also be /usr/include/python$(PYTHON_VERSION)
 # look for Python.h in the specified path
- PYTHON_DIR = /usr/local/include/python$(PYTHON_VERSION)
- PYTHON_LIBDIR = /usr/local/lib/python$(PYTHON_VERSION)
-#YTHON_DIR = /home/ssa/Python-2.3.4/include/python$(PYTHON_VERSION)
-#PYTHON_LIBDIR = /home/ssa/Python-2.3.4/lib/python$(PYTHON_VERSION)
+# Python prefix is what you configured python with 
+# if you built from source (e.g. ./configure --with-prefix=/usr/local)
+# on debian it's often /usr, on SuSE /usr/local
+PYTHON_PREFIX = /usr/local
+PYTHON_DIR = $(PYTHON_PREFIX)/include/python$(PYTHON_VERSION)
+PYTHON_LIBDIR = $(PYTHON_PREFIX)/lib/python$(PYTHON_VERSION)
 
-# put used Python modules from lib-dynload here, e.g. time, mysql etc.
-PYTHON_DYNLOAD_MODULES = $(PYTHON_LIBDIR)/lib-dynload/time.so \
-	$(PYTHON_LIBDIR)/lib-dynload/_csv.so \
-	$(PYTHON_LIBDIR)/lib-dynload/_socket.so \
-	$(PYTHON_LIBDIR)/lib-dynload/binascii.so \
-	$(PYTHON_LIBDIR)/lib-dynload/math.so \
-	$(PYTHON_LIBDIR)/lib-dynload/_random.so \
-	$(PYTHON_LIBDIR)/lib-dynload/cStringIO.so \
-
-
+# put used Python modules from lib-dynload here, e.g. time, mysql, _cvs.so etc.
+PYTHON_DYNLOAD_MODULES = $(PYTHON_LIBDIR)/lib-dynload/time.so	
 PYTHON_module_cflags = -I$(PYTHON_DIR)
 PYTHON_module_ldflags = -L$(PYTHON_LIBDIR)/config -lpython$(PYTHON_VERSION) $(PYTHON_DYNLOAD_MODULES)
 
@@ -47,7 +41,7 @@ PYTHON_module_ldflags = -L$(PYTHON_LIBDIR)/config -lpython$(PYTHON_VERSION) $(PY
 #   flite text to speech
 #
 # uncomment the next lines if you want to have flite text-to-speech (ivr.say("Hello there"); ) 
-FLITE_DIR = /home/ssa/flite-1.2-release
+FLITE_DIR = /usr/src/flite-1.2-release
 ALT_FLITE_DIR = /usr/include/flite
 IVR_TTS_module_ldflags =  -L$(FLITE_DIR)/lib -lm  -lflite_cmu_us_kal  -lflite_usenglish \
 	-lflite_cmulex -lflite
