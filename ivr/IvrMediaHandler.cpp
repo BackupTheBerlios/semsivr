@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.9 2004/07/02 13:33:24 sayer Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.10 2004/07/02 14:58:14 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -228,7 +228,7 @@ IvrAudioConnector::~IvrAudioConnector()
 
 void IvrAudioConnector::close() {
   if (!closed) {
-    if (mediaIn) { // recording file is ours
+    if ((!isPlayConnector) && mediaIn) { // recording file is ours
       mediaIn->close();
       mediaIn->in.release();
       delete mediaIn;
@@ -237,6 +237,7 @@ void IvrAudioConnector::close() {
     closed = true;
   }
 }
+
 void IvrAudioConnector::setScriptEventQueue(AmEventQueue* newScriptEventQueue) {
   scriptEventQueue = newScriptEventQueue;
   if (dtmfDetector)
@@ -331,18 +332,25 @@ int IvrAudioConnector::streamPut(unsigned int user_ts, unsigned int size) {
 
 
 int IvrAudioConnector::startRecording(string& filename) {  
-   mediaIn = new AmAudioFile("Wav", 1);
+  if (mediaIn) {
+//     ERROR("already recording. Call Stop Record first.\n");
+//     return 1;
+    DBG("closing previous recording...\n");
+    stopRecording();
+  }
+
+  mediaIn = new AmAudioFile("Wav", 1);
    
-   if(mediaIn->open(filename.c_str(),AmAudioFile::Write)){
-       ERROR("AmRtpStream::record(): Cannot open file\n");
-       delete mediaIn;
-       mediaIn = 0;
-       return -1;
-   }
-   mediaIn->in.reset(out.get()); // transfer our out format to the file's in format 
-   // so mediaIn->put will convert from our format to mediaIn's format
-   mediaInRunning = true;
-   return 0;
+  if(mediaIn->open(filename.c_str(),AmAudioFile::Write)){
+    ERROR("AmRtpStream::record(): Cannot open file\n");
+    delete mediaIn;
+    mediaIn = 0;
+    return -1;
+  }
+  mediaIn->in.reset(out.get()); // transfer our out format to the file's in format 
+  // so mediaIn->put will convert from our format to mediaIn's format
+  mediaInRunning = true;
+  return 0;
 }
 
 int IvrAudioConnector::stopRecording() { 
