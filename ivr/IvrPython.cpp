@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.20 2004/07/16 10:54:08 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.21 2004/07/16 12:11:24 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -411,7 +411,7 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
 	DBG(" trying cache \"%s\" .. ", cache_filename.c_str());
 	if (file_exists(cache_filename)) {
 	  DBG("hit. Playing from cache.\n");
-	  SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaHandler::IVR_enqueueMediaFile, cache_filename, front));
+	  SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_enqueueMediaFile, cache_filename, front));
 	  SCRIPT_RETURN_i(1);
 	} else {
 	  DBG("miss.\n");
@@ -431,7 +431,7 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
       delete_utterance(u);
       DBG("%f seconds of speech synthesized\n",durs);
       //-----------------
-      SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaHandler::IVR_enqueueMediaFile, msg_filename, front));
+      SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_enqueueMediaFile, msg_filename, front));
       
       SCRIPT_RETURN_i(1);
     } else {
