@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.h,v 1.5 2004/07/01 16:18:38 sayer Exp $
+ * $Id: IvrMediaHandler.h,v 1.6 2004/07/05 18:38:00 sayer Exp $
  * Copyright (C) 2004 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -68,6 +68,8 @@ class IvrAudioConnector : public AmAudio {
   bool isPlayConnector;
   void refreshFormat();
   void setDefaultFormat();
+  void unsafe_refreshFormat();
+  void unsafe_setDefaultFormat();
 
   bool closed;
   

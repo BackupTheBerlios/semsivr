@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.14 2004/07/05 18:30:06 sayer Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.15 2004/07/05 18:38:00 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -274,7 +274,6 @@ void IvrAudioConnector::setDefaultFormat() {
     }
 }
 
-
 void IvrAudioConnector::setActiveMedia(IvrMediaWrapper* newMedia) {
     DBG("setting active media...\n");
     activeMedia = newMedia;
@@ -307,6 +306,32 @@ void IvrAudioConnector::refreshFormat() {
   }
 }
 
+void IvrAudioConnector::unsafe_refreshFormat() {
+  if (activeMedia) {
+    if (isPlayConnector) {
+      in.release(); // we don't own the fmt!
+      in.reset(activeMedia->in.get());
+    } else {
+      out.release(); // we don't own the fmt!
+      out.reset(activeMedia->out.get());
+    }
+  } else {
+    unsafe_setDefaultFormat();
+  }
+}
+
+void IvrAudioConnector::unsafe_setDefaultFormat() {
+    if (isPlayConnector) {
+      DBG("Setting in format of play connector to default format.\n");
+      in.release();
+      in.reset(myInternalFormat);
+    } else {
+      DBG("Setting out format of record connector to default format.\n");
+      out.release();
+      out.reset(myInternalFormat);
+    }
+}
+
 int IvrAudioConnector::streamGet(unsigned int user_ts, unsigned int size) {
   //  DBG("IvrAudioConnector::streamGet(%d, %d)\n", user_ts, size);
   if (!isPlayConnector) {
@@ -324,7 +349,8 @@ int IvrAudioConnector::streamGet(unsigned int user_ts, unsigned int size) {
   int ret = activeMedia->streamGetRaw(user_ts, size);
   //		DBG("Got %d.", ret);
   while (ret<0) {
-    setActiveMedia(mediaHandler->getNewOutMedia());
+    activeMedia = mediaHandler->getNewOutMedia();
+    unsafe_refreshFormat(); // need to use unsafe function here as we are called from convert
     if (!activeMedia)
       return 0;
 
