@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.cpp,v 1.3 2004/06/08 15:20:17 sayer Exp $
+ * $Id: IvrDtmfDetector.cpp,v 1.4 2004/06/18 19:51:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -232,7 +232,7 @@ IvrDtmfDetector::isdn_audio_eval_dtmf(int* result, dtmf_state *s)
 	    s->wait_after_dtmf = DTMF_WAIT_AFTER_DTMF; // skip next three blocks (3*NPOINTS == 3*93 == 35 ms)
 	    s->different_dtmf_length = 0;
 	    s->last_detected = what;
-	    parent->onDTMFEvent(IVR_what);    
+	    destinationEventQueue->postEvent(new IvrScriptEvent(IvrScriptEvent::IVR_DTMF, IVR_what));
 	}
 	
     } 
@@ -304,8 +304,8 @@ int IvrDtmfDetector::streamPut(unsigned char* samples, unsigned int size, unsign
     return size;
 }
 
- IvrDtmfDetector::IvrDtmfDetector(IvrPython* parent_) //ivr_dtmf_callback_t onDTMFCallback)
-     : /*DTMFCallback(onDTMFCallback),*/ parent(parent_), errorWrongPacketSizePrinted(false)
+ IvrDtmfDetector::IvrDtmfDetector(AmEventQueue* destinationEventQueue)
+     :  destinationEventQueue(destinationEventQueue), errorWrongPacketSizePrinted(false)
  {
      state = 0;
      state = isdn_audio_dtmf_init(state);

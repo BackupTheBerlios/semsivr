@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.h,v 1.2 2004/06/11 16:37:36 sayer Exp $
+ * $Id: IvrPython.h,v 1.3 2004/06/18 19:51:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -25,6 +25,8 @@
 
 #ifndef IVR_PERL
 #include <Python.h>
+#include <compile.h>
+#include <frameobject.h>
 #else	//IVR_PERL
 #include <EXTERN.h>                     /* from the Perl distribution */
 #include <perl.h>                       /* from the Perl distribution */
@@ -43,7 +45,26 @@
 
 #define PY_MOD_NAME "ivr"
 
-class IvrPython : public AmThread
+struct IvrScriptEvent: public AmEvent {
+  int DTMFKey;
+  AmSessionEvent* event;
+  AmRequest* req;
+
+  IvrScriptEvent(int event_id, int dtmf_Key);
+  IvrScriptEvent(int event_id, AmRequest* req);
+  IvrScriptEvent(int event_id, AmSessionEvent* event);
+  IvrScriptEvent(int event_id);
+    
+  enum Action { 
+    IVR_Bye,
+    IVR_Notify,
+    IVR_DTMF,
+    IVR_MediaQueueEmpty
+  };
+};
+
+
+class IvrPython : public AmThread, AmEventHandler
 {
    private:
 
@@ -51,12 +72,25 @@ class IvrPython : public AmThread
       //static void* pythonThread(void*);
       //pthread_t pPythonThread;
 
+      auto_ptr<AmEventQueue> scriptEventQueue; //  this is our EvQ: we get bye, DTMF and media empty here 
+      void process(AmEvent* event);  // we get events here
+
+
+      void onBye(AmRequest* req);
+      void onNotify(AmSessionEvent* event);
+      void onDTMFEvent(int detectedKey);
+      void onMediaQueueEmpty();
+
+      //      int pythonTrace(PyObject *obj, struct _frame* /*PyFrameObject * */ frame, int what, PyObject *arg);
+
    public:
       AmCmd* pCmd;
       char* fileName;
       bool fileOpened;
       AmSession* pAmSession;
       AmCondition<bool> isEvent;
+
+      AmEventQueue* mediaEventQueue;        //  we post events to be processed by media stream here
 
       //AmCondition<bool> pythonStopped;
 
@@ -66,17 +100,17 @@ class IvrPython : public AmThread
       cst_voice* tts_voice;
 #endif //IVR_WITH_TTS
 
-      IvrPython();
+      IvrPython(AmEventQueue* MediaEventQueue);
       ~IvrPython();
 
+      void postScriptEvent(AmEvent* evt);
+      AmEventQueue* getScriptEventQueue() { return scriptEventQueue.get(); }
 #ifndef IVR_PERL
       PyThreadState*  mainInterpreterThreadState;
       PyThreadState*  pyMainThreadState;
 #else   //IVR_PERL
       PerlInterpreter *my_perl_interp;  /***  The Perl interpreter    ***/
 #endif  //IVR_PERL
-
-      auto_ptr<IvrMediaHandler> mediaHandler;
 
       void run();
       void on_stop();
@@ -93,11 +127,6 @@ class IvrPython : public AmThread
       char* onDTMFCallback;
       char* onMediaQueueEmptyCallback;
 #endif	//IVR_PERL
-
-      void onBye(AmRequest* req);
-      void onNotify(AmSessionEvent* event);
-      void onDTMFEvent(int detectedKey);
-      void onMediaQueueEmpty();
 
       pthread_t getThreadDescriptor();
 };

@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.h,v 1.3 2004/06/15 10:05:00 sayer Exp $
+ * $Id: Ivr.h,v 1.4 2004/06/18 19:51:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -26,6 +26,7 @@
 typedef void (*ivr_dtmf_callback_t)( int detectedKey );
 typedef void (*ivr_media_queue_empty_callback_t)( void );
 
+
 #define MOD_NAME "ivr"
 
 #ifndef IVR_PERL
@@ -38,16 +39,20 @@ typedef void (*ivr_media_queue_empty_callback_t)( void );
 
 #include "AmApi.h"
 #include "SemsConfiguration.h"
-// #include "IvrPython.h"
 
 #ifdef IVR_WITH_TTS
  #include "flite.h"
 #endif
 
-class IvrPython;
+#include <string>
+#include <utility>
 
-//#include <string>
-//using std::string;
+using std::string;
+using std::auto_ptr;
+
+class IvrPython;
+class IvrMediaHandler;
+struct IvrMediaEvent;
 
 class IvrFactory: public AmStateFactory
 {
@@ -66,6 +71,7 @@ public:
     AmDialogState* onInvite(AmCmd&);
 };
 
+
 class IvrDialog : public AmDialogState
 {
     string pythonScriptFile;
@@ -76,6 +82,10 @@ class IvrDialog : public AmDialogState
     string tts_cache_path;
 #endif
 
+    void process(AmEvent* event); // we override this to process also mediaEvents
+    int handleMediaEvent(IvrMediaEvent* evt); // which come here then
+
+    auto_ptr<IvrMediaHandler> mediaHandler;
  public:
     IvrPython* ivrPython;
 #ifndef IVR_WITH_TTS

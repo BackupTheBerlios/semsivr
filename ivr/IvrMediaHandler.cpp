@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.1 2004/06/07 13:00:23 sayer Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.2 2004/06/18 19:51:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -30,54 +30,19 @@ IvrMediaEvent::IvrMediaEvent(int event_id, string MediaFile, bool front)
 }
 
 
-IvrMediaHandler::IvrMediaHandler(IvrPython* parent_)
-		: closed(false), parent(parent_), 
-		  recordConnector(parent_, this, false), playConnector(parent_, this, true),
-		  eventQueue(this)
-    
+IvrMediaHandler::IvrMediaHandler(AmEventQueue* scriptEventQueue)
+  : closed(false), scriptEventQueue(scriptEventQueue),
+    recordConnector(scriptEventQueue, this, false), 
+    playConnector(scriptEventQueue, this, true)  
 {
+}
+
+void IvrMediaHandler::setScriptEventQueue(AmEventQueue* newScriptEventQueue) {
+  scriptEventQueue = newScriptEventQueue;
 }
 
 IvrMediaHandler::~IvrMediaHandler()
 {
-}
-
-void IvrMediaHandler::process(AmEvent* event) {
-
-    DBG("Processing event...\n");
-    IvrMediaEvent* evt = dynamic_cast<IvrMediaEvent*>(event);
-    if (!evt) {
-	ERROR("IvrMediaHandler got event with wrong type.\n");
-	return;
-    }
-
-    switch (evt->event_id) {
-	case IVR_enqueueMediaFile: {
-	    enqueueMediaFile(evt->MediaFile, evt->front);
-	}; break;
-	case IVR_emptyMediaQueue: {
-	    emptyMediaQueue();
-	}; break;
-	case IVR_startRecording: {
-	    startRecording(evt->MediaFile);
-	}; break;
-	case IVR_stopRecording: {
-	    stopRecording();
-	}; break;
-	case IVR_enableDTMFDetection: {
-	    enableDTMFDetection();
-	}; break;
-	case IVR_disableDTMFDetection: {
-	    disableDTMFDetection();
-	}; break;
-	case IVR_resumeDTMFDetection: {
-	    resumeDTMFDetection();
-	}; break;
-	case IVR_pauseDTMFDetection: {
-	    pauseDTMFDetection();
-	}; break;
-    }
-    event->processed = true;
 }
 
 int IvrMediaHandler::enqueueMediaFile(string fileName, bool front) {
@@ -100,47 +65,42 @@ int IvrMediaHandler::enqueueMediaFile(string fileName, bool front) {
 		return 0; //ok
 }
 
-void IvrMediaHandler::emptyMediaQueue() {
+int IvrMediaHandler::emptyMediaQueue() {
     playConnector.setActiveMedia(0);
     mediaOutQueue.clear();
+    return 0;
 }
 
-void IvrMediaHandler::startRecording(string& filename) {
-    recordConnector.startRecording(filename);
+int IvrMediaHandler::startRecording(string& filename) {
+    return recordConnector.startRecording(filename);
 }
 
-void  IvrMediaHandler::stopRecording() {
-    recordConnector.stopRecording();
+int IvrMediaHandler::stopRecording() {
+    return recordConnector.stopRecording();
 }
 
-void  IvrMediaHandler::pauseRecording() {
-    recordConnector.pauseRecording();   
-}
-void  IvrMediaHandler::resumeRecording() {
-    recordConnector.resumeRecording();
+int IvrMediaHandler::pauseRecording() {
+    return recordConnector.pauseRecording();   
 }
 
-
-void IvrMediaHandler::enableDTMFDetection(){ 
-		recordConnector.enableDTMFDetection();
+int IvrMediaHandler::resumeRecording() {
+    return recordConnector.resumeRecording();
 }
 
-void IvrMediaHandler::disableDTMFDetection() {
-    recordConnector.disableDTMFDetection();
-		//  detectionRunning = false;
-		//delete dtmfDetector;
-		//dtmfDetector = 0;
+int IvrMediaHandler::enableDTMFDetection(){ 
+  return recordConnector.enableDTMFDetection();
 }
 
-void IvrMediaHandler::pauseDTMFDetection() {
-    recordConnector.pauseDTMFDetection();
-		//detectionRunning = false;
+int IvrMediaHandler::disableDTMFDetection() {
+    return recordConnector.disableDTMFDetection();
 }
 
-void IvrMediaHandler::resumeDTMFDetection() {
-    recordConnector.resumeDTMFDetection();
-		// if (dtmfDetector) 
-		//detectionRunning = true;
+int IvrMediaHandler::pauseDTMFDetection() {
+    return recordConnector.pauseDTMFDetection();
+}
+
+int IvrMediaHandler::resumeDTMFDetection() {
+    return recordConnector.resumeDTMFDetection();
 }
 
 void IvrMediaHandler::close(){
@@ -176,8 +136,10 @@ IvrMediaWrapper* IvrMediaHandler::getNewOutMedia() {
   
     mediaOutQueue.pop_front();
     if (mediaOutQueue.empty()) {
-	DBG("Empty media queue after pop. Notifying parent IvrPython.\n");
-	parent->onMediaQueueEmpty();
+	DBG("Empty media queue after pop.\n");
+	DBG("Posting IvrScriptEvent::IVR_MediaQueueEmpty into scriptEventQueue.\n");
+	scriptEventQueue->postEvent(new IvrScriptEvent(IvrScriptEvent::IVR_MediaQueueEmpty)); 
+	// TODO: wait until event processed? 
 	if (mediaOutQueue.empty())
 	    return 0;
 	// if queue filled in onEmpty callback return new 
@@ -214,9 +176,10 @@ void IvrMediaWrapper::getSamples(unsigned char* dest, int count) {
 /* IvrAudioConnector connects the MediaHandler to RtpStream. 
  * 
  */
-IvrAudioConnector::IvrAudioConnector(IvrPython* parent, IvrMediaHandler* mh, bool isPlay) 
-    : AmAudio(), activeMedia(0), mediaHandler(mh), isPlayConnector(isPlay),
-      detectionRunning(false), dtmfDetector(0), closed(false), parent(parent)
+IvrAudioConnector::IvrAudioConnector(AmEventQueue* scriptEventQueue, IvrMediaHandler* mh, bool isPlay) 
+  : AmAudio(),  scriptEventQueue(scriptEventQueue), mediaHandler(mh),
+      isPlayConnector(isPlay), activeMedia(0),
+      detectionRunning(false), dtmfDetector(0), closed(false)
 {
     setDefaultFormat();
 }
@@ -239,11 +202,11 @@ void IvrAudioConnector::setDefaultFormat() {
     fmt->sample = IVR_AUDIO_SAMPLE;
     fmt->channels = IVR_AUDIO_CHANNELS;
     if (isPlayConnector) {
-				DBG("Setting in format of play connector to default format.\n");
-				in.reset(fmt);
+      DBG("Setting in format of play connector to default format.\n");
+      in.reset(fmt);
     } else {
-				DBG("Setting out format of record connector to default format.\n");
-				out.reset(fmt);
+      DBG("Setting out format of record connector to default format.\n");
+      out.reset(fmt);
     }
 }
 
@@ -255,85 +218,86 @@ void IvrAudioConnector::setActiveMedia(IvrMediaWrapper* newMedia) {
 }
 
 void IvrAudioConnector::refreshFormat() {
-		if (activeMedia) {
-				if (isPlayConnector) {
-						in.reset(activeMedia->in.get());
-				} else {
-						out.reset(activeMedia->out.get());
-				}
-		} else {
-				setDefaultFormat();
-		}
+  if (activeMedia) {
+    if (isPlayConnector) {
+      in.reset(activeMedia->in.get());
+    } else {
+      out.reset(activeMedia->out.get());
+    }
+  } else {
+    setDefaultFormat();
+  }
 }
 
 int IvrAudioConnector::streamGet(unsigned int user_ts, unsigned int size) {
-//  DBG("IvrAudioConnector::streamGet(%d, %d)\n", user_ts, size);
- 		if (!isPlayConnector) {
-				ERROR("streamGet of IvrAudioConnector with type \"record\" called. There must be something wrong here.\n");
-				return -1;
-		}
-
-		if (closed)
-				return -1;
+  //  DBG("IvrAudioConnector::streamGet(%d, %d)\n", user_ts, size);
+  if (!isPlayConnector) {
+    ERROR("streamGet of IvrAudioConnector with type \"record\" called. There must be something wrong here.\n");
+    return -1;
+  }
   
-		if (!activeMedia) {
-//				    DBG("no active mnedia\n");
-				return 0; // TODO: check if return 0 is correct
-		}
-		int ret = activeMedia->streamGetRaw(user_ts, size);
-//		DBG("Got %d.", ret);
-		while (ret<0) {
-				activeMedia = mediaHandler->getNewOutMedia();
-				if (!activeMedia)
-						return 0;
-				ret = activeMedia->streamGetRaw(user_ts, size);
-		}
-
-		if (ret>0) {
-				activeMedia->getSamples((unsigned char*)samples, ret );
-		}
-		return ret;
+  if (closed)
+    return -1;
+  
+  if (!activeMedia) {
+    //				    DBG("no active mnedia\n");
+    return 0; // TODO: check if return 0 is correct
+  }
+  int ret = activeMedia->streamGetRaw(user_ts, size);
+  //		DBG("Got %d.", ret);
+  while (ret<0) {
+    activeMedia = mediaHandler->getNewOutMedia();
+    if (!activeMedia)
+      return 0;
+    ret = activeMedia->streamGetRaw(user_ts, size);
+  }
+  
+  if (ret>0) {
+    activeMedia->getSamples((unsigned char*)samples, ret );
+  }
+  return ret;
 }
 
 int IvrAudioConnector::streamPut(unsigned int user_ts, unsigned int size) {
-    if (closed)
-	return -1;
+  if (closed)
+    return -1;
+  
+  if (isPlayConnector) {
+    ERROR("streamPut of IvrAudioConnector with type \"play\" called. There must be something wrong here.\n");
+    return -1;
+  }
+  
+  int ret = 0;    //*TODO: -1 ?
+  
+  if (detectionRunning && dtmfDetector) {
+    //DBG("IvrMediaHandler::streamPut : detecting DTMF.\n");
+    dtmfDetector->streamPut((unsigned char*)samples, size, user_ts );
+    ret = size;
+  }
     
-    if (isPlayConnector) {
-	ERROR("streamPut of IvrAudioConnector with type \"play\" called. There must be something wrong here.\n");
-	return -1;
-    }
-
-    int ret = 0;    //*TODO: -1 ?
-    
-    if (detectionRunning && dtmfDetector) {
-	//DBG("IvrMediaHandler::streamPut : detecting DTMF.\n");
-	dtmfDetector->streamPut((unsigned char*)samples, size, user_ts );
-	ret = size;
-    }
-    
-    if (mediaIn && mediaInRunning) {
-	ret = mediaIn->put(user_ts, (unsigned char*)samples, size/(out->sample * out->channels));
-    }
+  if (mediaIn && mediaInRunning) {
+    ret = mediaIn->put(user_ts, (unsigned char*)samples, size/(out->sample * out->channels));
+  }
   return ret;
 }
 
 
-void IvrAudioConnector::startRecording(string& filename) {  
+int IvrAudioConnector::startRecording(string& filename) {  
    mediaIn = new AmAudioFile("Wav", 1);
    
    if(mediaIn->open(filename.c_str(),AmAudioFile::Write)){
        ERROR("AmRtpStream::record(): Cannot open file\n");
        delete mediaIn;
        mediaIn = 0;
-       return;
+       return -1;
    }
    mediaIn->in.reset(out.get()); // transfer our out format to the file's in format 
    // so mediaIn->put will convert from our format to mediaIn's format
    mediaInRunning = true;
+   return 0;
 }
 
-void IvrAudioConnector::stopRecording() { 
+int IvrAudioConnector::stopRecording() { 
     mediaInRunning = false;
     if (mediaIn) {
 	mediaIn->close();
@@ -341,33 +305,47 @@ void IvrAudioConnector::stopRecording() {
 	mediaIn = 0;
     }
     refreshFormat();
+    return 0;
 }
 
-void IvrAudioConnector::pauseRecording() { 
+int IvrAudioConnector::pauseRecording() { 
     mediaInRunning = false;
+    return 0;
 }
 
-void IvrAudioConnector::resumeRecording() { 
+int IvrAudioConnector::resumeRecording() { 
     if (mediaIn)
 	mediaInRunning = true;
+    else 
+      return -1; // error
+    return 0;
 }
 
-void IvrAudioConnector::enableDTMFDetection() {
-    dtmfDetector = new IvrDtmfDetector(parent);
+int IvrAudioConnector::enableDTMFDetection() {
+    dtmfDetector = new IvrDtmfDetector(scriptEventQueue);
     detectionRunning = true;
+    return 0;
 }
 
-void IvrAudioConnector::disableDTMFDetection() {
+int IvrAudioConnector::disableDTMFDetection() {
     detectionRunning = false;    
-    delete dtmfDetector;
+    if (dtmfDetector)
+      delete dtmfDetector;
     dtmfDetector = 0;
+    return 0;
 }
 
-void IvrAudioConnector::pauseDTMFDetection() {
+int IvrAudioConnector::pauseDTMFDetection() {
+    if (!detectionRunning)
+      return -1;
     detectionRunning = false;
+    return 0;
 }
 
-void IvrAudioConnector::resumeDTMFDetection() {
+int IvrAudioConnector::resumeDTMFDetection() {
     if (dtmfDetector)
 	detectionRunning = true;
+    else 
+      return -1;
+    return 0;
 }

@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.3 2004/06/15 10:05:00 sayer Exp $
+ * $Id: Ivr.cpp,v 1.4 2004/06/18 19:51:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -148,6 +148,7 @@ IvrDialog::IvrDialog(string scriptFile, string tts_cache_path_, bool tts_caching
 #endif
 {
    pythonScriptFile = scriptFile;
+   mediaHandler.reset(new IvrMediaHandler(this)); // temporarily set us for script event queue
 
 #ifdef IVR_WITH_TTS
     flite_init();
@@ -158,13 +159,16 @@ IvrDialog::IvrDialog(string scriptFile, string tts_cache_path_, bool tts_caching
 #endif
 }
 
-IvrDialog::~IvrDialog(){}
+IvrDialog::~IvrDialog(){
+}
 
 void IvrDialog::onSessionStart(AmRequest* req){
-   ivrPython = new IvrPython();
+   ivrPython = new IvrPython(this);
    ivrPython->fileName = (char*)pythonScriptFile.c_str();
    ivrPython->pAmSession = getSession();
    ivrPython->pCmd = &(req->cmd);
+   
+   mediaHandler->setScriptEventQueue(ivrPython->getScriptEventQueue());
 
 #ifdef IVR_WITH_TTS
    ivrPython->tts_voice = tts_voice;
@@ -176,8 +180,8 @@ void IvrDialog::onSessionStart(AmRequest* req){
    // plug on our media handler (in and out)
 
    DBG("Start duplex...\n");
-   ivrPython->pAmSession->rtp_str.duplex(ivrPython->mediaHandler->getPlayConnector(),
-					 ivrPython->mediaHandler->getRecordConnector());
+   ivrPython->pAmSession->rtp_str.duplex(mediaHandler->getPlayConnector(),
+					 mediaHandler->getRecordConnector());
 
    DBG("End duplex.\n");
 
@@ -190,33 +194,103 @@ void IvrDialog::onSessionStart(AmRequest* req){
       req->bye();
    getSession()->sess_stopped.wait_for();
    ivrPython->stop();
+   //#ifndef IVR_PERL
+   //ivrPython->cancel();
+   //#endif
+    
+    DBG("()ivrPython is %s \n", ivrPython->getStopped()? "stopped":"not stopped yet");
+    for (int i=0;i<100;i++) {
+      if (ivrPython->getStopped())
+	break;
+      usleep(5000);
+    }
 #ifndef IVR_PERL
-   ivrPython->cancel();
+ 
+    if (!ivrPython->getStopped()) {
+      DBG("()pthread_cancel()\n");
+      ivrPython->cancel();
+    }
 #endif
+    DBG("run_fin\n");
 }
 
 
 void IvrDialog::onBye(AmRequest* req){
-  if( !ivrPython->getStopped()) {
-    ivrPython->onBye(req);
-    ivrPython->stop();
-#ifndef IVR_PERL
-    ivrPython->cancel();
-#endif
-  }
+  if(!ivrPython->getStopped()) {
+    ivrPython->postScriptEvent(new IvrScriptEvent(IvrScriptEvent::IVR_Bye, req));
+// #ifndef IVR_PERL
+//     if (!ivrPython->getStopped()) {
+//       ivrPython->cancel();
+//     }
+// #endif
+   }
 }
 
 int IvrDialog::onOther(AmSessionEvent* event)
 {
-    if(event->event_id == AmSessionEvent::Notify){
-      ivrPython->onNotify(event);
-        if (strstr(event->request.getBody().c_str(),"200 OK") != NULL){
-            ivrPython->isEvent.set(true);
-        }
-        event->processed = true;
-        DBG("Notify event: body= %s\n",event->request.getBody().c_str());
+//   if(event->event_id == AmSessionEvent::Notify){
+//         ivrPython->postScriptEvent(new IvrScriptEvent(IvrScriptEvent::IVR_Notify, event));
+//         if (strstr(event->request.getBody().c_str(),"200 OK") != NULL){
+//             ivrPython->isEvent.set(true);
+//         }
+//         event->processed = true;
+//         DBG("Notify event: body= %s\n",event->request.getBody().c_str());
+//
+//     }
+  return 0;
+}
 
+void IvrDialog::process(AmEvent* event) {
+  IvrMediaEvent* evt = dynamic_cast<IvrMediaEvent* >(event);
+  if (evt) { // this one is for us
+    DBG("IvrDialog processing event...\n");
+    if (handleMediaEvent(evt)) { 
+      ERROR("while processing Media event (ID=%i).\n",event->event_id);
+    }
+  } else {
+    //     AmDialogState::process(event);
+    AmSessionEvent* session_event = dynamic_cast<AmSessionEvent*>(event);
+    if(!session_event){
+	ERROR("AmSession: invalid event received.\n");
+	return;
     }
 
-    return AmDialogState::onOther(event);
+    DBG("in-dialog event received: %s\n",
+	session_event->request.cmd.method.c_str());
+
+    if(onOther(session_event))
+	ERROR("while proceeding session event (ID=%i).\n",session_event->event_id);
+  }
+}
+
+int IvrDialog::handleMediaEvent(IvrMediaEvent* evt) {
+  evt->processed = true; // we eat up all media events at the moment
+  switch (evt->event_id) {
+  case IvrMediaEvent::IVR_enqueueMediaFile: {
+    return mediaHandler->enqueueMediaFile(evt->MediaFile, evt->front);
+  }; break;
+  case IvrMediaEvent::IVR_emptyMediaQueue: {
+    return mediaHandler->emptyMediaQueue();
+  }; break;
+  case IvrMediaEvent::IVR_startRecording: {
+    return mediaHandler->startRecording(evt->MediaFile);
+  }; break;
+  case IvrMediaEvent::IVR_stopRecording: {
+    return mediaHandler->stopRecording();
+  }; break;
+  case IvrMediaEvent::IVR_enableDTMFDetection: {
+    return mediaHandler->enableDTMFDetection();
+  }; break;
+  case IvrMediaEvent::IVR_disableDTMFDetection: {
+    return mediaHandler->disableDTMFDetection();
+  }; break;
+  case IvrMediaEvent::IVR_resumeDTMFDetection: {
+    return mediaHandler->resumeDTMFDetection();
+  }; break;
+  case IvrMediaEvent::IVR_pauseDTMFDetection: {
+    return mediaHandler->pauseDTMFDetection();
+  }; break;
+  }
+  
+  return 0;
 }

@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.h,v 1.3 2004/06/08 15:20:17 sayer Exp $
+ * $Id: IvrDtmfDetector.h,v 1.4 2004/06/18 19:51:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -65,7 +65,7 @@ class IvrDtmfDetector
  private:
 //  void goertzel(pcm *sample, int sample_npoints, int* result);
 
-  ivr_dtmf_callback_t DTMFCallback;
+//  ivr_dtmf_callback_t DTMFCallback;
   
 /*   struct DetectorState { */
 /*     int last; */
@@ -80,15 +80,15 @@ class IvrDtmfDetector
   void    isdn_audio_eval_dtmf(int* result, dtmf_state *s);
   void    isdn_audio_calc_dtmf(dtmf_state *s, unsigned short *buf, int len, int* result);
   int max_val;
-  IvrPython* parent;
 
   dtmf_state* state;
   int result[16];
 
   bool errorWrongPacketSizePrinted; 
   FILE* fp;
+  AmEventQueue* destinationEventQueue;
  public:
-  IvrDtmfDetector(IvrPython* parent_);// ivr_dtmf_callback_t onDTMFCallback);
+  IvrDtmfDetector(AmEventQueue* destinationEventQueue);
   ~IvrDtmfDetector();
   int streamPut(unsigned char* samples, unsigned int size, unsigned int user_ts);
 };

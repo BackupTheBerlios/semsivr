@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.h,v 1.1 2004/06/07 13:00:23 sayer Exp $
+ * $Id: IvrMediaHandler.h,v 1.2 2004/06/18 19:51:59 sayer Exp $
  * Copyright (C) 2004 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -48,10 +48,21 @@ using std::string;
 class IvrMediaHandler;
 
 struct IvrMediaEvent: public AmEvent {
-    string MediaFile; 
-    bool front;
-
-    IvrMediaEvent(int event_id, string MediaFile = "" , bool front = true); 
+  string MediaFile; 
+  bool front;
+  
+  IvrMediaEvent(int event_id, string MediaFile = "" , bool front = true); 
+    
+  enum Action { 
+    IVR_enqueueMediaFile,
+    IVR_emptyMediaQueue,
+    IVR_startRecording, 
+    IVR_stopRecording, 
+    IVR_enableDTMFDetection, 
+    IVR_disableDTMFDetection,
+    IVR_pauseDTMFDetection,
+    IVR_resumeDTMFDetection
+  };
 };
 
 class IvrMediaWrapper : public AmAudioFile {
@@ -83,32 +94,31 @@ class IvrAudioConnector : public AmAudio {
   // for detection
   bool detectionRunning;
   IvrDtmfDetector* dtmfDetector;
-  IvrPython* parent;
-
+  
+  AmEventQueue* scriptEventQueue;
  protected:
   int streamGet(unsigned int user_ts, unsigned int size);
   int streamPut(unsigned int user_ts, unsigned int size);
  public: 
-  IvrAudioConnector(IvrPython* parent, IvrMediaHandler* mh, bool isPlay);
+  IvrAudioConnector(AmEventQueue* scriptEventQueue, IvrMediaHandler* mh, bool isPlay);
   ~IvrAudioConnector();
   void setActiveMedia(IvrMediaWrapper* newMedia);
 
-  void startRecording(string& filename);
-  void stopRecording();
-  void pauseRecording();
-  void resumeRecording();
+  int startRecording(string& filename);
+  int stopRecording();
+  int pauseRecording();
+  int resumeRecording();
   
-  void enableDTMFDetection();//ivr_dtmf_callback_t onDTMFCallback);
-  void disableDTMFDetection();
-  void pauseDTMFDetection(); // temporarily disable detection
-  void resumeDTMFDetection(); // reenable detection
+  int enableDTMFDetection();//ivr_dtmf_callback_t onDTMFCallback);
+  int disableDTMFDetection();
+  int pauseDTMFDetection(); // temporarily disable detection
+  int resumeDTMFDetection(); // reenable detection
   
   void close();
 };
 
-class IvrMediaHandler : public AmEventHandler
+class IvrMediaHandler 
 {
-    void process(AmEvent* event);
 
  private:
     bool closed;
@@ -117,40 +127,14 @@ class IvrMediaHandler : public AmEventHandler
     std::deque<IvrMediaWrapper*> mediaOutQueue;
     AmMutex queueMutex;
 
-    IvrPython* parent;
-
     IvrAudioConnector recordConnector;
     IvrAudioConnector playConnector;
 
-    int enqueueMediaFile(string fileName, bool front = false);
-    void emptyMediaQueue();
-    
-    void startRecording(string& filename);
-    void stopRecording();
-    void pauseRecording();
-    void resumeRecording();
-
-
-    void enableDTMFDetection();//ivr_dtmf_callback_t onDTMFCallback);
-    void disableDTMFDetection();
-    void pauseDTMFDetection(); // temporarily disable detection
-    void resumeDTMFDetection(); // reenable detection
+    AmEventQueue* scriptEventQueue;
 
  public:
-    enum Action { 
-	IVR_enqueueMediaFile,
-	IVR_emptyMediaQueue,
-	IVR_startRecording, 
-	IVR_stopRecording, 
-	IVR_enableDTMFDetection, 
-	IVR_disableDTMFDetection,
-	IVR_pauseDTMFDetection,
-	IVR_resumeDTMFDetection
-    };
-
-    AmEventQueue eventQueue;
-
-    IvrMediaHandler(IvrPython* parent_);
+    IvrMediaHandler(AmEventQueue* scriptEventQueue);
+    void setScriptEventQueue(AmEventQueue* newScriptEventQueue);
     ~IvrMediaHandler();
     
     void close();
@@ -159,6 +143,19 @@ class IvrMediaHandler : public AmEventHandler
     IvrAudioConnector* getRecordConnector();
     
     IvrMediaWrapper* getNewOutMedia();
+
+    int enqueueMediaFile(string fileName, bool front = false);
+    int emptyMediaQueue();
+    
+    int startRecording(string& filename);
+    int stopRecording();
+    int pauseRecording();
+    int resumeRecording();
+
+    int enableDTMFDetection();//ivr_dtmf_callback_t onDTMFCallback);
+    int disableDTMFDetection();
+    int pauseDTMFDetection(); // temporarily disable detection
+    int resumeDTMFDetection(); // reenable detection
 };
 
 #endif // _IVR_MEDIA_HANDLER_H_
