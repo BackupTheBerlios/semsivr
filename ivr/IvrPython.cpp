@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.10 2004/07/01 16:18:37 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.11 2004/07/02 13:49:00 zrichard Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -711,7 +711,9 @@ void IvrPython::run(){
 	perl_parse(my_perl_interp, xs_init, 2, embedding, (char **)NULL);
 	DBG("finished parse Perl, about to run Perl\n");
 	perl_run(my_perl_interp);
-	DBG("finished run Perl, about to destruct\n");
+	DBG("finished run Perl, about to sleep 5 seconds to let callback event catch up\n");
+	sleep(5);
+	DBG("after sleep, about to destruct\n");
 	perl_destruct(my_perl_interp);
 	DBG("finished destruct Perl, about to free\n");
 	perl_free(my_perl_interp);
