@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.h,v 1.3 2004/06/18 19:51:59 sayer Exp $
+ * $Id: IvrPython.h,v 1.4 2004/06/29 15:50:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -36,6 +36,8 @@
 #include "AmSession.h"
 #include "IvrMediaHandler.h"
 #include "IvrDtmfDetector.h"
+#include "Ivr.h"
+#include "IvrEvents.h"
 
 #include <pthread.h>
 
@@ -45,42 +47,24 @@
 
 #define PY_MOD_NAME "ivr"
 
-struct IvrScriptEvent: public AmEvent {
-  int DTMFKey;
-  AmSessionEvent* event;
-  AmRequest* req;
-
-  IvrScriptEvent(int event_id, int dtmf_Key);
-  IvrScriptEvent(int event_id, AmRequest* req);
-  IvrScriptEvent(int event_id, AmSessionEvent* event);
-  IvrScriptEvent(int event_id);
-    
-  enum Action { 
-    IVR_Bye,
-    IVR_Notify,
-    IVR_DTMF,
-    IVR_MediaQueueEmpty
-  };
-};
-
-
-class IvrPython : public AmThread, AmEventHandler
+class IvrPython : public AmThread, AmEventHandler, IvrEventProducer
 {
    private:
-
       void IvrPython::setPointer(const char* pythonPrName);
       //static void* pythonThread(void*);
       //pthread_t pPythonThread;
 
       auto_ptr<AmEventQueue> scriptEventQueue; //  this is our EvQ: we get bye, DTMF and media empty here 
       void process(AmEvent* event);  // we get events here
-
+      IvrEventProducer* regScriptEventProducer;
 
       void onBye(AmRequest* req);
       void onNotify(AmSessionEvent* event);
       void onDTMFEvent(int detectedKey);
       void onMediaQueueEmpty();
 
+      AmEventQueue* mediaEventQueue;        //  we post events to be processed by media stream here
+      AmMutex mutexForeignEventQueue;
       //      int pythonTrace(PyObject *obj, struct _frame* /*PyFrameObject * */ frame, int what, PyObject *arg);
 
    public:
@@ -90,8 +74,6 @@ class IvrPython : public AmThread, AmEventHandler
       AmSession* pAmSession;
       AmCondition<bool> isEvent;
 
-      AmEventQueue* mediaEventQueue;        //  we post events to be processed by media stream here
-
       //AmCondition<bool> pythonStopped;
 
 #ifdef IVR_WITH_TTS
@@ -100,11 +82,18 @@ class IvrPython : public AmThread, AmEventHandler
       cst_voice* tts_voice;
 #endif //IVR_WITH_TTS
 
-      IvrPython(AmEventQueue* MediaEventQueue);
+      IvrPython();
       ~IvrPython();
 
+      int registerForeignEventQueue(AmEventQueue* MediaEventQueue);
+      void unregisterForeignEventQueue();
+      void postMediaEvent(AmEvent* evt);
+
+      void registerWith(IvrEventProducer* scriptEventProducer);
+      void setNoUnregisterScriptQueue();
       void postScriptEvent(AmEvent* evt);
       AmEventQueue* getScriptEventQueue() { return scriptEventQueue.get(); }
+      
 #ifndef IVR_PERL
       PyThreadState*  mainInterpreterThreadState;
       PyThreadState*  pyMainThreadState;

@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.6 2004/06/28 19:09:01 rco Exp $
+ * $Id: Ivr.cpp,v 1.7 2004/06/29 15:50:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -148,9 +148,8 @@ IvrDialog::IvrDialog(string scriptFile, string tts_cache_path_, bool tts_caching
 #endif
 {
    pythonScriptFile = scriptFile;
-   mediaHandler = new IvrMediaHandler(this); // temporarily set us for script event queue
-
-   ivrPython = new IvrPython(this);
+   mediaHandler = new IvrMediaHandler();
+   ivrPython = new IvrPython();
    ivrPython->fileName = (char*)pythonScriptFile.c_str();
 
 #ifdef IVR_WITH_TTS
@@ -164,11 +163,12 @@ IvrDialog::IvrDialog(string scriptFile, string tts_cache_path_, bool tts_caching
 
 IvrDialog::~IvrDialog()
 {
-#ifndef IVR_PERL
-  if (!ivrPython->getStopped())
-    ivrPython->cancel();  // kill the interpreter thread if not already stopped
-#endif
+// #ifndef IVR_PERL
+//   if (!ivrPython->getStopped())
+//     ivrPython->cancel();  // kill the interpreter thread if not already stopped
+// #endif
 
+//   ivrPython->setNoUnregisterScriptQueue();
   delete mediaHandler;
 }
 
@@ -176,7 +176,8 @@ void IvrDialog::onSessionStart(AmRequest* req){
   ivrPython->pAmSession = getSession();
   ivrPython->pCmd = &(req->cmd);
    
-  mediaHandler->setScriptEventQueue(ivrPython->getScriptEventQueue());
+  ivrPython->registerWith(mediaHandler);
+  ivrPython->registerForeignEventQueue(this);
   
 #ifdef IVR_WITH_TTS
   ivrPython->tts_voice = tts_voice;
@@ -184,7 +185,6 @@ void IvrDialog::onSessionStart(AmRequest* req){
   ivrPython->tts_cache_path = tts_cache_path;
 #endif //IVR_WITH_TTS
   ivrPython->start();
-  AmThreadWatcher::instance()->add(ivrPython);
   
    // start new thread to process script events
 #ifdef IVR_PERL
@@ -200,20 +200,33 @@ void IvrDialog::onSessionStart(AmRequest* req){
 					mediaHandler->getRecordConnector());
    
   DBG("End duplex.\n");
+
+  ivrPython->unregisterForeignEventQueue();  // we don't want more events from the script
+
 #ifdef IVR_PERL
   scriptEventP->stop();
 #endif
    
   if(!getSession()->sess_stopped.get())
     req->bye();
+ 
   DBG("Waiting for the interpreter to stop\n");  
   ivrPython->stop();
-  for (int i=0;i<10;i++) { // give the interpreter thread at least 1s to finish
+  ivrPython->setNoUnregisterScriptQueue();
+  for (int i=0;i<INTERPRETER_THREAD_STOP_TIMEOUT*10;i++) { // give the interpreter some time to finish
     if (ivrPython->getStopped())
       break;
     usleep(100000); 
   }
-  
+
+#ifdef KILL_HANGING_INTERPRETER
+   if (!ivrPython->getStopped())
+     ivrPython->cancel();  // kill the interpreter thread if not stopped by itself
+#endif
+
+  DBG("Handing over interpreter thread to ThreadWatcher.\n"); 
+  AmThreadWatcher::instance()->add(ivrPython);
+ 
   DBG("finished.\n");
 }
 

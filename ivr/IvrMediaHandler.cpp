@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.5 2004/06/28 19:09:01 rco Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.6 2004/06/29 15:50:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -20,27 +20,31 @@
  */
 #include "IvrPython.h"
 #include "IvrMediaHandler.h"
-
 #include "log.h"
 
-IvrMediaEvent::IvrMediaEvent(int event_id, string MediaFile, bool front) 
-    :    AmEvent(event_id), MediaFile(MediaFile), front(front)
-{
-    DBG("New Media Event: %d, %s\n", event_id, MediaFile.c_str());
-}
-
-
-IvrMediaHandler::IvrMediaHandler(AmEventQueue* scriptEventQueue)
-  : closed(false), scriptEventQueue(scriptEventQueue),
-    recordConnector(scriptEventQueue, this, false), 
-    playConnector(scriptEventQueue, this, true)  
+IvrMediaHandler::IvrMediaHandler()
+  : closed(false),
+    recordConnector(this, false), 
+    playConnector(this, true)  
 {
 }
 
-void IvrMediaHandler::setScriptEventQueue(AmEventQueue* newScriptEventQueue) {
+int IvrMediaHandler::registerForeignEventQueue(AmEventQueue* newScriptEventQueue) {
+  int ret = 0;
+  //  mutexScriptEventQueue.lock();
   scriptEventQueue = newScriptEventQueue;
   recordConnector.setScriptEventQueue(newScriptEventQueue);
   playConnector.setScriptEventQueue(newScriptEventQueue);
+  //   mutexScriptEventQueue.unlock();
+  return ret;
+}
+
+void IvrMediaHandler::unregisterForeignEventQueue() {
+  mutexScriptEventQueue.lock();
+  scriptEventQueue = 0;
+  recordConnector.setScriptEventQueue(0);
+  playConnector.setScriptEventQueue(0);
+  mutexScriptEventQueue.unlock();
 }
 
 IvrMediaHandler::~IvrMediaHandler()
@@ -50,7 +54,7 @@ IvrMediaHandler::~IvrMediaHandler()
 
 int IvrMediaHandler::enqueueMediaFile(string fileName, bool front) {
   IvrMediaWrapper* wav_file = new IvrMediaWrapper(string("Wav"));
-  DBG("Queue: enqueuing %d with out = %d.\n", (int)wav_file, (int)wav_file->out.get());
+  //  DBG("Queue: enqueuing %d with out = %d.\n", (int)wav_file, (int)wav_file->out.get());
   
   if(wav_file->open(fileName.c_str(),AmAudioFile::Read)){
     ERROR("IvrMediaHandler::enqueueMediaFile: Cannot open file %s\n", fileName.c_str());
@@ -140,8 +144,13 @@ IvrMediaWrapper* IvrMediaHandler::getNewOutMedia() {
     mediaOutQueue.pop_front();
     if (mediaOutQueue.empty()) {
 	DBG("Empty media queue after pop.\n");
-	DBG("Posting IvrScriptEvent::IVR_MediaQueueEmpty into scriptEventQueue.\n");
-	scriptEventQueue->postEvent(new IvrScriptEvent(IvrScriptEvent::IVR_MediaQueueEmpty)); 
+	if (scriptEventQueue) {
+	  DBG("Posting IvrScriptEvent::IVR_MediaQueueEmpty into scriptEventQueue.\n");
+	  scriptEventQueue->postEvent(new IvrScriptEvent(IvrScriptEvent::IVR_MediaQueueEmpty)); 
+	} else {
+	  DBG("no scriptEventQueue to notify available.\n");
+	}
+	  
 	// TODO: wait until event processed? 
 	if (mediaOutQueue.empty())
 	    return 0;
@@ -179,8 +188,8 @@ void IvrMediaWrapper::getSamples(unsigned char* dest, int count) {
 /* IvrAudioConnector connects the MediaHandler to RtpStream. 
  * 
  */
-IvrAudioConnector::IvrAudioConnector(AmEventQueue* scriptEventQueue, IvrMediaHandler* mh, bool isPlay) 
-  : AmAudio(),  scriptEventQueue(scriptEventQueue), mediaHandler(mh),
+IvrAudioConnector::IvrAudioConnector(IvrMediaHandler* mh, bool isPlay) 
+  : AmAudio(),  scriptEventQueue(0), mediaHandler(mh),
       isPlayConnector(isPlay), activeMedia(0),
       detectionRunning(false), dtmfDetector(0), closed(false)
 {
@@ -332,7 +341,12 @@ int IvrAudioConnector::resumeRecording() {
 }
 
 int IvrAudioConnector::enableDTMFDetection() {
-    dtmfDetector = new IvrDtmfDetector(scriptEventQueue);
+  DBG("record connnector enabling dtmf detection...\n");
+    dtmfDetector = new IvrDtmfDetector();
+    if (!scriptEventQueue) {
+      DBG("missing script event ueue!!!!!\n");
+    } 
+    dtmfDetector->setDestinationEventQueue(scriptEventQueue);
     detectionRunning = true;
     return 0;
 }

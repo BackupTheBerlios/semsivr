@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.h,v 1.6 2004/06/28 19:09:01 rco Exp $
+ * $Id: IvrDtmfDetector.h,v 1.7 2004/06/29 15:50:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -54,7 +54,7 @@ class IvrDtmfDetector
   dtmf_state state;
   AmEventQueue* destinationEventQueue;
  public:
-  IvrDtmfDetector(AmEventQueue* destinationEventQueue);
+  IvrDtmfDetector();
   ~IvrDtmfDetector();
   void setDestinationEventQueue(AmEventQueue* eventQueue);
   int streamPut(unsigned char* samples, unsigned int size, unsigned int user_ts);

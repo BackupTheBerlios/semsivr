@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.h,v 1.5 2004/06/22 19:16:47 sayer Exp $
+ * $Id: Ivr.h,v 1.6 2004/06/29 15:50:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -37,6 +37,14 @@ typedef void (*ivr_media_queue_empty_callback_t)( void );
 #define	SCRIPT_TYPE				" PERL "
 #endif	//IVR_PERL
 
+// give the interpreter thread n seconds to stop by itself
+#define INTERPRETER_THREAD_STOP_TIMEOUT  10 
+// if this is defined, an interpreter not stopping itself is killed
+//  WARNING: operation might become unpredictable or sems might crash 
+//           if an interpreter thread in an ended session is still does 
+//           things with the session (so better kill hanging interpreter threads)  
+#define KILL_HANGING_INTERPRETER
+
 #include "AmApi.h"
 #include "SemsConfiguration.h"
 
@@ -56,30 +64,30 @@ struct IvrMediaEvent;
 
 class IvrFactory: public AmStateFactory
 {
-	 SemsConfiguration mIvrConfig;
-    string pythonScriptPath;
-    string defaultPythonScriptFile;
+  SemsConfiguration mIvrConfig;
+  string pythonScriptPath;
+  string defaultPythonScriptFile;
 
 #ifdef IVR_WITH_TTS
-    bool tts_caching;
-    string tts_cache_path;
+  bool tts_caching;
+  string tts_cache_path;
 #endif
 
 public:
-    IvrFactory(const string& _app_name);
-    int onLoad();
-    AmDialogState* onInvite(AmCmd&);
+  IvrFactory(const string& _app_name);
+  int onLoad();
+  AmDialogState* onInvite(AmCmd&);
 };
 
 
 class IvrDialog : public AmDialogState
 {
-    string pythonScriptFile;
-    //IvrPython ivrPython;
+  string pythonScriptFile;
+  //IvrPython ivrPython;
 #ifdef IVR_WITH_TTS
-    cst_voice* tts_voice;
-    bool tts_caching;
-    string tts_cache_path;
+  cst_voice* tts_voice;
+  bool tts_caching;
+  string tts_cache_path;
 #endif
 
     void process(AmEvent* event); // we override this to process also mediaEvents
@@ -99,19 +107,5 @@ class IvrDialog : public AmDialogState
     void onBye(AmRequest* req);
     int onOther(AmSessionEvent* event);
 };
-
-#ifdef IVR_PERL
-#define SCRIPT_EVENT_CHECK_INTERVAL_US 500 
-class IvrScriptEventProcessor : public AmThread {
-  AmSharedVar<bool> runcond;
-  AmEventQueue* q;
- public:
-  IvrScriptEventProcessor(AmEventQueue* watchThisQueue);
-  ~IvrScriptEventProcessor();
-  void run();
-  void on_stop();
-};
-#endif // IVR_PERL
-
 
 #endif

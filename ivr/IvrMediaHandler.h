@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.h,v 1.3 2004/06/22 14:02:11 sayer Exp $
+ * $Id: IvrMediaHandler.h,v 1.4 2004/06/29 15:50:59 sayer Exp $
  * Copyright (C) 2004 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -28,6 +28,7 @@
 
 #include "Ivr.h"
 #include "IvrDtmfDetector.h"
+#include "IvrEvents.h"
  
 #include "amci/codecs.h"
 class IvrPython;
@@ -46,24 +47,6 @@ using std::string;
 #define IVR_AUDIO_SAMPLE        2
 
 class IvrMediaHandler;
-
-struct IvrMediaEvent: public AmEvent {
-  string MediaFile; 
-  bool front;
-  
-  IvrMediaEvent(int event_id, string MediaFile = "" , bool front = true); 
-    
-  enum Action { 
-    IVR_enqueueMediaFile,
-    IVR_emptyMediaQueue,
-    IVR_startRecording, 
-    IVR_stopRecording, 
-    IVR_enableDTMFDetection, 
-    IVR_disableDTMFDetection,
-    IVR_pauseDTMFDetection,
-    IVR_resumeDTMFDetection
-  };
-};
 
 class IvrMediaWrapper : public AmAudioFile {
  public: 
@@ -99,8 +82,8 @@ class IvrAudioConnector : public AmAudio {
  protected:
   int streamGet(unsigned int user_ts, unsigned int size);
   int streamPut(unsigned int user_ts, unsigned int size);
- public: 
-  IvrAudioConnector(AmEventQueue* scriptEventQueue, IvrMediaHandler* mh, bool isPlay);
+ public:  
+  IvrAudioConnector(IvrMediaHandler* mh, bool isPlay);
   ~IvrAudioConnector();
   void setActiveMedia(IvrMediaWrapper* newMedia);
   void setScriptEventQueue(AmEventQueue* newScriptEventQueue);
@@ -118,9 +101,8 @@ class IvrAudioConnector : public AmAudio {
   void close();
 };
 
-class IvrMediaHandler 
+class IvrMediaHandler : public IvrEventProducer
 {
-
  private:
     bool closed;
    
@@ -132,11 +114,13 @@ class IvrMediaHandler
     IvrAudioConnector playConnector;
 
     AmEventQueue* scriptEventQueue;
-
+    AmMutex mutexScriptEventQueue;
  public:
-    IvrMediaHandler(AmEventQueue* scriptEventQueue);
-    void setScriptEventQueue(AmEventQueue* newScriptEventQueue);
-    ~IvrMediaHandler();
+    IvrMediaHandler();
+    int registerForeignEventQueue(AmEventQueue* scriptEventQueue);
+    void unregisterForeignEventQueue();
+    
+    virtual ~IvrMediaHandler();
     
     void close();
 

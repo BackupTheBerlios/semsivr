@@ -4,7 +4,7 @@ PYTHON_VERSION = 2.2
 # adjust to point to python include path
 # can also be /usr/include/python$(PYTHON_VERSION)
 # look for Python.h in the specified path
-PYTHON_DIR = /usr/include/python$(PYTHON_VERSION)
+PYTHON_DIR = /usr/local/include/python$(PYTHON_VERSION)
 
 # uncomment the next two lines if you want to script the ivr with perl scripts
 #IVR_PERL_module_ldflags = `perl -MExtUtils::Embed -e ldopts` -DPERL_IMPLICIT_CONTEXT
@@ -23,16 +23,17 @@ PYTHON_DIR = /usr/include/python$(PYTHON_VERSION)
 LOCAL_INCLUDES = -I$(FLITE_DIR)/lang/usenglish
 LD_FLAGS = -L/usr/lib/python$(PYTHON_VERSION)/config \
 	-lpython$(PYTHON_VERSION) -ldl -lpthread -lutil -lm \
-	-Xlinker -export-dynamic
+	-Xlinker --export-dynamic -Xlinker --no-strip-discarded
    
 
 module_ldflags = -L/usr/lib/python$(PYTHON_VERSION)/config \
 	-lpython$(PYTHON_VERSION) -ldl -lpthread -lutil -lm \
-	-Xlinker -export-dynamic \
+	-Xlinker --export-dynamic \
 	$(IVR_TTS_module_ldflags) \
-	$(IVR_PERL_module_ldflags)	
-# Python: put used modules from pythons lib-dynload here, e.g.
-#	/usr/lib/python2.2/lib-dynload/time.so
+	$(IVR_PERL_module_ldflags) \
+	/usr/lib/python$(PYTHON_VERSION)/lib-dynload/time.so	
+# Python: put used modules from pythons lib-dynload here, e.g.time
+#	/usr/lib/python$(PYTHON_VERSION)/lib-dynload/time.so
    
 # for perl support:
 # -DIVR_PERL  `perl -MExtUtils::Embed -e ccopts `

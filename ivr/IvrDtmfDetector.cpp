@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.cpp,v 1.6 2004/06/28 19:09:01 rco Exp $
+ * $Id: IvrDtmfDetector.cpp,v 1.7 2004/06/29 15:50:59 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -156,8 +156,12 @@ IvrDtmfDetector::isdn_audio_eval_dtmf(int* result, dtmf_state *s)
 	what = '.';
     }
     if ((what != s->last) && (what != ' ') && (what != '.')) {
-      DBG("Posting DTMF: %c (%d)\n",what, IVR_what);
-      destinationEventQueue->postEvent(new IvrScriptEvent(IvrScriptEvent::IVR_DTMF, IVR_what));
+      if (destinationEventQueue) {
+	DBG("Posting DTMF: %c (%d)\n",what, IVR_what);
+ 	destinationEventQueue->postEvent(new IvrScriptEvent(IvrScriptEvent::IVR_DTMF, IVR_what));
+      } else {
+	DBG("DTMF: %c (%d) [no script to notify]\n",what, IVR_what);
+      }
     }
 	
     s->last = what;
@@ -196,8 +200,8 @@ int IvrDtmfDetector::streamPut(unsigned char* samples, unsigned int size, unsign
   return size;
 }
 
-IvrDtmfDetector::IvrDtmfDetector(AmEventQueue* destinationEventQueue)
-  :  destinationEventQueue(destinationEventQueue)
+IvrDtmfDetector::IvrDtmfDetector()
+  :  destinationEventQueue(0)
 {
   /* precalculate 2 * cos (2 PI k / N) */
   int i, kp, k;
