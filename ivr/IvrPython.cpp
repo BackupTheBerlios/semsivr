@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.14 2004/07/05 17:01:45 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.15 2004/07/05 21:10:20 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -698,6 +698,12 @@ void xs_init(pTHX)
 	newXS(PY_MOD_NAME"::""sleep", ivrSleep, file);
 	newXS(PY_MOD_NAME"::""usleep", ivrUSleep, file);
 	newXS(PY_MOD_NAME"::""wakeUp", ivrWakeUp, file);
+
+	// legacy from old (sequential) ivr
+	newXS(PY_MOD_NAME"::""play", ivrPlay, file);
+	newXS(PY_MOD_NAME"::""record", ivrRecord, file);
+	newXS(PY_MOD_NAME"::""playAndDetect", ivrPlayAndDetect, file);
+	newXS(PY_MOD_NAME"::""detect", ivrDetect, file);
 }
 #endif
 } // end of extern "C"
