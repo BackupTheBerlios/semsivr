@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.7 2004/07/01 16:18:38 sayer Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.8 2004/07/02 06:26:46 zrichard Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -201,6 +201,7 @@ IvrAudioConnector::IvrAudioConnector(IvrMediaHandler* mh, bool isPlay)
   : AmAudio(),  scriptEventQueue(0), mediaHandler(mh),
       isPlayConnector(isPlay), activeMedia(0),
     detectionRunning(false), dtmfDetector(0), closed(false),
+    mediaInRunning(false), mediaIn(0), 
     myInternalFormat(new AmAudioSimpleFormat(IVR_AUDIO_CODEC))
 {
     myInternalFormat->rate = IVR_AUDIO_RATE;
