@@ -1,5 +1,5 @@
 /*
- * $Id: IvrEvents.h,v 1.2 2004/07/12 15:21:23 ilk Exp $
+ * $Id: IvrEvents.h,v 1.3 2004/08/10 10:36:09 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -58,12 +58,15 @@ struct IvrScriptEvent: public AmEvent {
 
 
 struct IvrMediaEvent: public AmEvent {
-  string MediaFile; 
-  bool front;
-  bool loop;
-  
-  IvrMediaEvent(int event_id, string MediaFile = "" , bool front = true, bool loop = false); 
+    string MediaFile; 
+    bool front;
+    bool loop;
     
+    int usleep_time;
+  
+    IvrMediaEvent(int event_id, string MediaFile = "" , bool front = true, bool loop = false); 
+    
+    IvrMediaEvent(int event_id, int sleep_time);
   enum Action { 
     IVR_enqueueMediaFile,
     IVR_emptyMediaQueue,
@@ -72,7 +75,8 @@ struct IvrMediaEvent: public AmEvent {
     IVR_enableDTMFDetection, 
     IVR_disableDTMFDetection,
     IVR_pauseDTMFDetection,
-    IVR_resumeDTMFDetection
+    IVR_resumeDTMFDetection,
+    IVR_mthr_usleep 
   };
 };
 

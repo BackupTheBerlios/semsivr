@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.h,v 1.7 2004/07/12 14:58:58 ilk Exp $
+ * $Id: IvrMediaHandler.h,v 1.8 2004/08/10 10:36:09 sayer Exp $
  * Copyright (C) 2004 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -63,6 +63,7 @@ class IvrMediaWrapper : public AmAudioFile {
 
 class IvrAudioConnector : public AmAudio {
  private:
+    int deb_cnt;
   IvrMediaHandler* mediaHandler;
   IvrMediaWrapper* activeMedia;
   bool isPlayConnector;

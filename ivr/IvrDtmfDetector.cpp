@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.cpp,v 1.10 2004/07/25 22:00:33 sayer Exp $
+ * $Id: IvrDtmfDetector.cpp,v 1.11 2004/08/10 10:36:08 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -31,9 +31,13 @@
 // relative dtmf detection is better that absolute (works with e.g. grandstream)
 #define DTMF_USE_RELATIVE_DETECTION
 
-#include "IvrDtmfDetector.h"
 #ifndef DTMF_STANDALONE_TEST
 #include "IvrPython.h"
+#endif
+
+#include "IvrDtmfDetector.h"
+
+#ifndef DTMF_STANDALONE_TEST
 #include "IvrMediaHandler.h"
 #include "log.h"
 #else
