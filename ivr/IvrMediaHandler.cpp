@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.8 2004/07/02 06:26:46 zrichard Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.9 2004/07/02 13:33:24 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -230,6 +230,7 @@ void IvrAudioConnector::close() {
   if (!closed) {
     if (mediaIn) { // recording file is ours
       mediaIn->close();
+      mediaIn->in.release();
       delete mediaIn;
       mediaIn = 0;
     }
@@ -348,6 +349,7 @@ int IvrAudioConnector::stopRecording() {
     mediaInRunning = false;
     if (mediaIn) {
 	mediaIn->close();
+	mediaIn->in.release();
 	delete mediaIn;
 	mediaIn = 0;
     }
