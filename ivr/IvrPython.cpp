@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.15 2004/07/05 21:10:20 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.16 2004/07/06 09:17:14 zrichard Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -194,13 +194,13 @@ extern "C" {
       if(SCRIPT_GET_i(stime)){
 	DBG("IVR: sleeping %d useconds.\n", stime);
 	SCRIPT_BEGIN_ALLOW_THREADS
-	  unsigned int timediff = 0;
+	  int timediff = 0;
 	timeval tvStart, tvNow;
 	gettimeofday(&tvStart,0);
 	pIvrPython->wakeUpFromSleep.set(false);
 	while((!pIvrPython->scriptStopped.get()) 
 	      && (!pIvrPython->wakeUpFromSleep.get()) 
-	      && (timediff < (unsigned int) stime)){
+	      && (timediff < stime)){
 	  usleep(10);
 	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
 	  if (evq)
@@ -210,8 +210,42 @@ extern "C" {
 	}
 	//	usleep(stime);
 	SCRIPT_END_ALLOW_THREADS
-	DBG("IVR: waking up after <= %d usec.\n", stime);
-	SCRIPT_RETURN_i(1);
+	DBG("IVR: waking up after <= %d usec.\n", timediff);
+	SCRIPT_RETURN_i(timediff);
+      } else {
+	SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong Arguments!");
+      }
+    } else {
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_NULL;
+    }
+  }
+
+  SCRIPT_DECLARE_FUNC(ivrmSleep) {
+    SCRIPT_DECLARE_VAR;
+    int stime;
+    if(pIvrPython != NULL){
+      if(SCRIPT_GET_i(stime)){
+	DBG("IVR: sleeping %d mseconds.\n", stime);
+	SCRIPT_BEGIN_ALLOW_THREADS
+	  int timediff = 0;
+	timeval tvStart, tvNow;
+	gettimeofday(&tvStart,0);
+	pIvrPython->wakeUpFromSleep.set(false);
+	while((!pIvrPython->scriptStopped.get()) 
+	      && (!pIvrPython->wakeUpFromSleep.get()) 
+	      && (timediff < stime)){
+	  usleep(10);
+	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
+	  if (evq)
+	    evq->processEvents();
+	  gettimeofday(&tvNow,0);
+	  timediff = (tvNow.tv_sec - tvStart.tv_sec)* 1000 + (tvNow.tv_usec - tvStart.tv_usec)/1000;
+	}
+	//	usleep(stime);
+	SCRIPT_END_ALLOW_THREADS
+	DBG("IVR: waking up after <= %d msec.\n", timediff);
+	SCRIPT_RETURN_i(timediff);
       } else {
 	SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong Arguments!");
       }
@@ -222,18 +256,19 @@ extern "C" {
   }
 
 
+
   SCRIPT_DECLARE_FUNC(ivrSleep) {
     SCRIPT_DECLARE_VAR;
-    int stime;
+    int stime, real_sleep_time;
     if(pIvrPython != NULL){
       if(SCRIPT_GET_i(stime)){
 	DBG("IVR: sleeping %d seconds.\n", stime);
 	SCRIPT_BEGIN_ALLOW_THREADS
-	  pIvrPython->doSleep(stime);
+	  real_sleep_time = pIvrPython->doSleep(stime);
 	  //	sleep(stime);
 	SCRIPT_END_ALLOW_THREADS
-	DBG("IVR: waking up after <= %d sec.\n", stime);
-	SCRIPT_RETURN_i(1);
+	DBG("IVR: waking up after <= %d sec.\n", real_sleep_time);
+	SCRIPT_RETURN_i(real_sleep_time);
       } else {
 	SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong Arguments!");
       }
@@ -467,18 +502,18 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
   SCRIPT_DECLARE_FUNC(ivrRecord) {
     SCRIPT_DECLARE_VAR;
     char* fileName;
-    int timeout = 0;
+    int timeout = 0, real_sleep_time;
     if(pIvrPython != NULL){
       if(SCRIPT_GET_s_optional_i(fileName, timeout)) {
 	DBG("IVR: start record to file (%s).\n", fileName);
 	string sFileName(fileName);
 	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_startRecording, sFileName));
 	SCRIPT_BEGIN_ALLOW_THREADS
-	pIvrPython->doSleep(timeout);
+	real_sleep_time = pIvrPython->doSleep(timeout);
 	SCRIPT_END_ALLOW_THREADS
-	  DBG("IVR: waking up after <= %d sec. Stopping Record\n", timeout);
+	  DBG("IVR: waking up after <= %d sec. Stopping Record\n", real_sleep_time);
 	SAFE_POST_MEDIAEVENT(new IvrMediaEvent(IvrMediaEvent::IVR_stopRecording));
-	SCRIPT_RETURN_i(1);
+	SCRIPT_RETURN_i(real_sleep_time);
       }
       else {
 	SCRIPT_ERR_STRING("ivrPlay: parameter mismatch!\n"
@@ -697,6 +732,7 @@ void xs_init(pTHX)
 
 	newXS(PY_MOD_NAME"::""sleep", ivrSleep, file);
 	newXS(PY_MOD_NAME"::""usleep", ivrUSleep, file);
+	newXS(PY_MOD_NAME"::""msleep", ivrmSleep, file);
 	newXS(PY_MOD_NAME"::""wakeUp", ivrWakeUp, file);
 
 	// legacy from old (sequential) ivr
@@ -811,6 +847,7 @@ void IvrPython::run(){
 
        {"sleep", ivrSleep, METH_VARARGS, "Sleep n seconds, or until wakeUp"},
        {"usleep", ivrUSleep, METH_VARARGS, "Sleep n microseconds, or until wakeUp"},
+       {"msleep", ivrmSleep, METH_VARARGS, "Sleep n milliseconds, or until wakeUp"},
        {"wakeUp", ivrWakeUp, METH_VARARGS, "wake Up from sleep"},
 
        // legacy from old ivr: sequential functions
@@ -1033,21 +1070,24 @@ void IvrPython::onNotify(AmSessionEvent* event) {
 }
 
 // sleeps for n seconds, while checking stopped and wakeup
-void IvrPython::doSleep(int seconds) {
-  unsigned int timediff = 0;
+int IvrPython::doSleep(int seconds) {
+  int timediff = 0;
   timeval tvStart, tvNow;
   gettimeofday(&tvStart,0);
   wakeUpFromSleep.set(false);
   while((!scriptStopped.get()) 
 	&& (!wakeUpFromSleep.get()) 
-	&& ((!seconds) || (timediff < (unsigned int) seconds*1000000))) {
+	&& ((!seconds) || (timediff < seconds))) {
     usleep(10);
     AmEventQueue* evq = getScriptEventQueue();
     if (evq)
       evq->processEvents();
     gettimeofday(&tvNow,0);
-    timediff = (tvNow.tv_sec - tvStart.tv_sec)* 1000000 + (tvNow.tv_usec - tvStart.tv_usec);
+	// calculate the time from start, in seconds, round down
+    timediff = tvNow.tv_sec - tvStart.tv_sec + ((tvNow.tv_usec < tvStart.tv_usec) ? -1 : 0) ;
   }
+  // calculate the time from start, in seconds, round up
+  return (tvNow.tv_sec - tvStart.tv_sec + ((tvNow.tv_usec > tvStart.tv_usec) ? 1 : 0));
 }
 
 void IvrPython::on_stop()

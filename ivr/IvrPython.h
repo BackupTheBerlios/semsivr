@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.h,v 1.8 2004/07/05 21:10:20 sayer Exp $
+ * $Id: IvrPython.h,v 1.9 2004/07/06 09:17:14 zrichard Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -132,7 +132,7 @@ class IvrPython : public AmThread, AmEventHandler, IvrEventProducer
       AmSharedVar<bool> isMediaQueueEmpty;
       AmSharedVar<int> dtmfKey;
       
-      void doSleep(int seconds);
+      int doSleep(int seconds);
 };
 
 #ifndef IVR_PERL
@@ -157,10 +157,12 @@ class IvrPython : public AmThread, AmEventHandler, IvrEventProducer
 #define SCRIPT_GET_s(sStr)  ( (items!=1) ? 0 : \
 			({STRLEN paralen; sStr = SvPV(ST(0), paralen); 1; }) )
 #define SCRIPT_GET_i(iNum)  ( (items!=1) ? 0 : ({iNum = SvIV(ST(0)); 1; }) )
-#define SCRIPT_GET_optional_i SCRIPT_GET_i
-#define SCRIPT_GET_s_i(sStr,iNum)  ( ( (items<1) || (items>2) ) ? 0 : \
+#define SCRIPT_GET_optional_i(iNum) ( (items>1) ? 0 : \
+			({ (items==1) ? iNum=SvIV(ST(0)):0 ;1; }) )
+#define SCRIPT_GET_s_i(sStr,iNum)  ( (items!=2) ? 0 : \
+			({STRLEN paralen; sStr = SvPV(ST(0), paralen); iNum=SvIV(ST(1)); 1; }) )
+#define SCRIPT_GET_s_optional_i(sStr,iNum) ( ( (items<1) || (items>2) ) ? 0 : \
 			({STRLEN paralen; sStr = SvPV(ST(0), paralen); (items==2) ? iNum=SvIV(ST(1)):0 ;1; }) )
-#define SCRIPT_GET_s_optional_i SCRIPT_GET_s_i
 #define SCRIPT_GET_Os(oFunc, sName)  ( (items!=2) ? 0 : \
 			({STRLEN paralen; oFunc = SvPV(ST(0), paralen); sName = SvPV(ST(1), paralen); 1; } ) )
 #define SCRIPT_RETURN_s(sStr)		XSRETURN_PV(sStr)

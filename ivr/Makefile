@@ -9,8 +9,9 @@ PYTHON_VERSION = 2.3
 PYTHON_DIR = /usr/include/python$(PYTHON_VERSION)
 
 # uncomment the next two lines if you want to script the ivr with perl scripts
-#IVR_PERL_module_ldflags = `perl -MExtUtils::Embed -e ldopts` -DPERL_IMPLICIT_CONTEXT
-#IVR_PERL_module_cflags = -DIVR_PERL `perl -MExtUtils::Embed -e ccopts ` -DPERL_IMPLICIT_CONTEXT
+IVR_PERL_module_ldflags = `perl -MExtUtils::Embed -e ldopts` -DPERL_IMPLICIT_CONTEXT \
+/usr/lib/perl/5.8/auto/IO/IO.so /usr/lib/perl/5.8/auto/Fcntl/Fcntl.so /usr/lib/perl/5.8/auto/Socket/Socket.so /usr/local/lib/perl/5.8.3/auto/DBI/DBI.so /usr/lib/perl/5.8/auto/Sys/Hostname/Hostname.so /usr/lib/perl/5.8/auto/Sys/Syslog/Syslog.so /usr/lib/perl/5.8/auto/Sys/Syslog/Syslog.so /usr/lib/perl5/auto/Date/Calc/Calc.so /usr/lib/perl/5.8/auto/MIME/Base64/Base64.so /usr/lib/perl/5.8/auto/POSIX/POSIX.so /usr/lib/perl/5.8/auto/Time/HiRes/HiRes.so /usr/lib/perl/5.8/auto/Cwd/Cwd.so /usr/lib/perl5/auto/Bit/Vector/Vector.so /usr/lib/perl5/auto/DBD/mysql/mysql.so 
+IVR_PERL_module_cflags = -DIVR_PERL `perl -MExtUtils::Embed -e ccopts ` -DPERL_IMPLICIT_CONTEXT
 
 # uncomment the next lines if you want to have flite text-to-speech (ivr.say("Hello there"); ) 
 
