@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.h,v 1.2 2004/06/07 21:59:37 sayer Exp $
+ * $Id: IvrDtmfDetector.h,v 1.3 2004/06/08 15:20:17 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -29,13 +29,16 @@ class AmAudioIvrInFormat;
 // these are returned if the non number keys are pressed
 
 #define DTMF_NPOINTS 93        /* Number of samples for DTMF recognition */
-#define DTMF_SIGNAL_LENGTH_THRESHOLD 2 // dtmf must be longer than or equal to 2*93 samples 
-#define DTMF_WAIT_AFTER_DTMF 10
+#define DTMF_SIGNAL_LENGTH_THRESHOLD  2 // dtmf must be longer than or equal to 2*93 samples 
+#define DTMF_DIFFERENT_SIGNAL_MINIMUM 2 // after dtmf minumum of x frames other signal must be detected
+#define DTMF_WAIT_AFTER_DTMF 0
 
 typedef struct dtmf_state {
     char last;
     int  dtmf_signal_length;
     int  wait_after_dtmf;
+    char last_detected;
+    int  different_dtmf_length;
     int idx;
     int buf[DTMF_NPOINTS];
 } dtmf_state;
