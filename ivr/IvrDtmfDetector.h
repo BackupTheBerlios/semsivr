@@ -1,5 +1,5 @@
 /*
- * $Id: IvrDtmfDetector.h,v 1.7 2004/06/29 15:50:59 sayer Exp $
+ * $Id: IvrDtmfDetector.h,v 1.8 2004/07/14 23:01:19 zrichard Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -32,11 +32,13 @@ class AmAudioIvrInFormat;
 #define DTMF_NPOINTS    205        /* Number of samples for DTMF recognition */
 #define SAMPLERATE     8000        
 #define PI          3.14159
+#define DTMF_INTERVAL     7
 
 typedef signed short pcm;    // we get signed 16 bit  
 
 struct dtmf_state {
   char last;
+  int last_dtmf_sample;
   int idx;
   int buf[DTMF_NPOINTS];
   int result[16];
