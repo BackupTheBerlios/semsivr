@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.16 2004/07/06 09:17:14 zrichard Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.17 2004/07/12 14:58:58 ilk Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -58,10 +58,10 @@ IvrMediaHandler::~IvrMediaHandler()
   emptyMediaQueue();
 }
 
-int IvrMediaHandler::enqueueMediaFile(string fileName, bool front) {
+int IvrMediaHandler::enqueueMediaFile(string fileName, bool front, bool loop) {
   IvrMediaWrapper* wav_file = new IvrMediaWrapper(string("Wav"));
   //  DBG("Queue: enqueuing %d with out = %d.\n", (int)wav_file, (int)wav_file->out.get());
-  
+  wav_file->loop.set(loop);
   if(wav_file->open(fileName.c_str(),AmAudioFile::Read)){
     ERROR("IvrMediaHandler::enqueueMediaFile: Cannot open file %s\n", fileName.c_str());
     return -1;
@@ -375,7 +375,7 @@ int IvrAudioConnector::streamPut(unsigned int user_ts, unsigned int size) {
   int ret = 0;    //*TODO: -1 ?
   
   if (detectionRunning && dtmfDetector) {
-    //DBG("IvrMediaHandler::streamPut : detecting DTMF.\n");
+    DBG("IvrMediaHandler::streamPut : detecting DTMF.\n");
     dtmfDetector->streamPut((unsigned char*)samples, size, user_ts );
     ret = size;
   }

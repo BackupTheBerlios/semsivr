@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.h,v 1.6 2004/07/05 18:38:00 sayer Exp $
+ * $Id: IvrMediaHandler.h,v 1.7 2004/07/12 14:58:58 ilk Exp $
  * Copyright (C) 2004 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -134,7 +134,7 @@ class IvrMediaHandler : public IvrEventProducer
     
     IvrMediaWrapper* getNewOutMedia();
 
-    int enqueueMediaFile(string fileName, bool front = false);
+    int enqueueMediaFile(string fileName, bool front = false, bool loop = false);
     int emptyMediaQueue();
     
     int startRecording(string& filename);
