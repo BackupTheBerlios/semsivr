@@ -1,5 +1,5 @@
 /*
- * $Id: IvrEvents.cpp,v 1.1 2004/06/29 15:50:59 sayer Exp $
+ * $Id: IvrEvents.cpp,v 1.2 2004/06/30 10:41:35 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -35,23 +35,23 @@ IvrMediaEvent::IvrMediaEvent(int event_id, string MediaFile, bool front)
 IvrScriptEvent::IvrScriptEvent(int event_id, int dtmf_Key)
   : AmEvent(event_id), DTMFKey(dtmf_Key)
 {
-  assert(event_id == IVR_DTMF);
+  //  assert(event_id == IVR_DTMF);
 }
 IvrScriptEvent::IvrScriptEvent(int event_id, AmRequest* req)
   : AmEvent(event_id), req(req)
 {
-  assert(event_id == IVR_Bye);
+  // assert(event_id == IVR_Bye);
 }
 
 IvrScriptEvent::IvrScriptEvent(int event_id, AmSessionEvent* event)
   : AmEvent(event_id), event(event)
 {
-  assert(event_id == IVR_Notify);
+  // assert(event_id == IVR_Notify);
 }
 
 IvrScriptEvent::IvrScriptEvent(int event_id)
   : AmEvent(event_id)
 {
-  assert(event_id == IVR_MediaQueueEmpty);
+  // assert(event_id == IVR_MediaQueueEmpty);
 }
 
