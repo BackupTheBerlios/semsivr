@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.2 2004/06/18 19:51:59 sayer Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.3 2004/06/22 14:02:11 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -39,6 +39,8 @@ IvrMediaHandler::IvrMediaHandler(AmEventQueue* scriptEventQueue)
 
 void IvrMediaHandler::setScriptEventQueue(AmEventQueue* newScriptEventQueue) {
   scriptEventQueue = newScriptEventQueue;
+  recordConnector.setScriptEventQueue(newScriptEventQueue);
+  playConnector.setScriptEventQueue(newScriptEventQueue);
 }
 
 IvrMediaHandler::~IvrMediaHandler()
@@ -195,6 +197,13 @@ void IvrAudioConnector::close() {
     //     activeMedia->close();
     closed = true;
 }
+
+void IvrAudioConnector::setScriptEventQueue(AmEventQueue* newScriptEventQueue) {
+  scriptEventQueue = newScriptEventQueue;
+  if (dtmfDetector)
+    dtmfDetector->setDestinationEventQueue(newScriptEventQueue);
+}
+
 
 void IvrAudioConnector::setDefaultFormat() {
     AmAudioSimpleFormat* fmt = new AmAudioSimpleFormat(IVR_AUDIO_CODEC);
