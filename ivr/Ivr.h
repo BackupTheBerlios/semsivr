@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.h,v 1.2 2004/06/11 16:37:36 sayer Exp $
+ * $Id: Ivr.h,v 1.3 2004/06/15 10:05:00 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -30,8 +30,10 @@ typedef void (*ivr_media_queue_empty_callback_t)( void );
 
 #ifndef IVR_PERL
 #define	SCRIPT_FILE_EXT			".py"
+#define	SCRIPT_TYPE				" PYTHON "
 #else	//IVR_PERL
 #define	SCRIPT_FILE_EXT			".pl"
+#define	SCRIPT_TYPE				" PERL "
 #endif	//IVR_PERL
 
 #include "AmApi.h"

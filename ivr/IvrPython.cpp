@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.3 2004/06/11 16:37:36 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.4 2004/06/15 10:05:00 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -93,7 +93,7 @@ extern "C" {
 	SCRIPT_RETURN_NULL; // raise exception
       }
     } else {
-	SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+	SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
 	SCRIPT_RETURN_NULL; // raise exception
     }
   }
@@ -107,7 +107,7 @@ extern "C" {
       pIvrPython->mediaHandler->eventQueue.processEvents();
       SCRIPT_RETURN_i(1);
     }   else {
-      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
       SCRIPT_RETURN_NULL;
     }
   }
@@ -124,10 +124,10 @@ extern "C" {
        	pIvrPython->mediaHandler->eventQueue.processEvents();
 	SCRIPT_RETURN_i(1);
       } else {
-	SCRIPT_RETURN_STR("IVR Python Error: Wrong Arguments!");
+	SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong Arguments!");
       }
     } else {
-      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
       SCRIPT_RETURN_NULL;
     }
   }
@@ -141,7 +141,7 @@ extern "C" {
       pIvrPython->mediaHandler->eventQueue.processEvents();
       SCRIPT_RETURN_i(1);
     }   else {
-      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
       SCRIPT_RETURN_NULL;
     }
   }
@@ -155,7 +155,7 @@ extern "C" {
       pIvrPython->mediaHandler->eventQueue.processEvents();
       SCRIPT_RETURN_i(1);
     }   else {
-      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
       SCRIPT_RETURN_NULL;
     }
   }
@@ -169,7 +169,7 @@ extern "C" {
       pIvrPython->mediaHandler->eventQueue.processEvents();
       SCRIPT_RETURN_i(1);
     }   else {
-      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
       SCRIPT_RETURN_NULL;
     }
   }
@@ -183,7 +183,7 @@ extern "C" {
       pIvrPython->mediaHandler->eventQueue.processEvents();
       SCRIPT_RETURN_i(1);
     }   else {
-      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
       SCRIPT_RETURN_NULL;
     }
   }
@@ -198,7 +198,7 @@ extern "C" {
       pIvrPython->mediaHandler->eventQueue.processEvents();
       SCRIPT_RETURN_i(1);
     }   else {
-      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
       SCRIPT_RETURN_NULL;
     }
   }
@@ -215,10 +215,10 @@ extern "C" {
 	DBG("IVR: waking up after %d usec.\n", stime);
 	SCRIPT_RETURN_i(1);
       } else {
-	SCRIPT_RETURN_STR("IVR Python Error: Wrong Arguments!");
+	SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong Arguments!");
       }
     } else {
-      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
       SCRIPT_RETURN_NULL;
     }
   }
@@ -236,10 +236,10 @@ extern "C" {
 	DBG("IVR: waking up after %d sec.\n", stime);
 	SCRIPT_RETURN_i(1);
       } else {
-	SCRIPT_RETURN_STR("IVR Python Error: Wrong Arguments!");
+	SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong Arguments!");
       }
     } else {
-      SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
       SCRIPT_RETURN_NULL;
     }
   }
@@ -249,7 +249,7 @@ extern "C" {
    */
   SCRIPT_DECLARE_FUNC(ivrGetTime) {
 #ifdef IVR_PERL
-    SCRIPT_DECLARE_VAR; 
+    SCRIPT_DECLARE_VAR;
 #endif
     SCRIPT_RETURN_i((int)time(NULL));
   }
@@ -265,7 +265,7 @@ extern "C" {
       SCRIPT_RETURN_s(pIvrPython->pCmd->from.c_str());
     }
     else {
-      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
     }
   }
 
@@ -279,7 +279,7 @@ extern "C" {
       SCRIPT_RETURN_s(pIvrPython->pCmd->to.c_str());
     }
     else
-      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
   }
 
 
@@ -292,7 +292,7 @@ extern "C" {
       SCRIPT_RETURN_s(pIvrPython->pCmd->from_uri.c_str());
     }
     else
-      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
   }
 
 
@@ -305,7 +305,7 @@ extern "C" {
       SCRIPT_RETURN_s(pIvrPython->pCmd->r_uri.c_str());
     }
     else
-      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
   }
 
 
@@ -318,7 +318,7 @@ extern "C" {
       SCRIPT_RETURN_s(pIvrPython->pCmd->domain.c_str());
     }
     else
-      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
   }
 
 
@@ -346,7 +346,7 @@ extern "C" {
 //       SCRIPT_RETURN_(0);
 //     }
 //     else
-//       SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
+//       SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
     SCRIPT_RETURN_NULL;
   }
 
@@ -400,7 +400,7 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
       SCRIPT_RETURN_NULL; // raise exception
     }
   } else {
-    SCRIPT_ERR_STRING("IVR Python Error: Wrong pointer to IvrPython!");
+    SCRIPT_ERR_STRING("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
     SCRIPT_RETURN_NULL; // raise exception
   }
 }
@@ -449,7 +449,7 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
       }
       return result;
     } else
-      return PyString_FromString("IVR Python Error: Wrong pointer to IvrPython!");
+      return PyString_FromString("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
 
 #else   //IVR_PERL
 	int result = 0;
@@ -486,7 +486,7 @@ SCRIPT_DECLARE_FUNC(ivrSay) {
       }
       SCRIPT_RETURN_i(result);
     } else
-      SCRIPT_RETURN_STR("IVR Python Error: Wrong pointer to IvrPython!");
+      SCRIPT_RETURN_STR("IVR" SCRIPT_TYPE "Error: Wrong pointer to IvrPython!");
 #endif  //IVR_PERL
 
 }
@@ -606,12 +606,12 @@ void IvrPython::run(){
      };
 
      if(!Py_IsInitialized()){
-       DBG("Start Python\n");
+       DBG("Start" SCRIPT_TYPE "\n");
        Py_Initialize();
        PyEval_InitThreads();
        pyMainThreadState = PyEval_SaveThread();
      }
-     DBG("Start new Python interpreter\n");
+     DBG("Start new" SCRIPT_TYPE "interpreter\n");
      PyEval_AcquireLock();
 //     PyThreadState* pyThreadState;
      if ( (mainInterpreterThreadState = Py_NewInterpreter()) != NULL){
@@ -627,20 +627,20 @@ void IvrPython::run(){
        }
        else{
             PyErr_Print();
-            ERROR("IVR Python Error: Failed to run \"%s\"\n", (char*)fileName);
+            ERROR("IVR" SCRIPT_TYPE "Error: Failed to run \"%s\"\n", (char*)fileName);
 	    retval = -1;// false;
        }
 
        Py_EndInterpreter(mainInterpreterThreadState);
      }
      else{
-       ERROR("IVR Python Error: Failed to start new interpreter.\n");
+       ERROR("IVR" SCRIPT_TYPE "Error: Failed to start new interpreter.\n");
      }
      PyEval_ReleaseLock();
 #else	//IVR_PERL
 
 	mainIvrPython = this;
-	DBG("Start Perl, about to alloc\n");
+	DBG("Start" SCRIPT_TYPE ", about to alloc\n");
 	my_perl_interp = perl_alloc();
 	printf("interp is %ld\n", (long) my_perl_interp);
 	printf("filename is %s\n", fileName);
@@ -659,7 +659,7 @@ void IvrPython::run(){
 #endif	//IVR_PERL
    }
    else{
-     ERROR("IVR Python Error: Can not open file \"%s\"\n",(char*) fileName);
+     ERROR("IVR" SCRIPT_TYPE "Error: Can not open file \"%s\"\n",(char*) fileName);
      retval = -1;// false;
    }
    DBG("IVR: run finished. stopping rtp stream...\n");
@@ -685,7 +685,7 @@ void IvrPython::onBye(AmRequest* req) {
   Py_DECREF(arglist);
 
   if (result == NULL) {
-      DBG("Calling IVR Python onMediaQueueEmpty failed.\n");
+      DBG("Calling IVR" SCRIPT_TYPE "onMediaQueueEmpty failed.\n");
       // PyErr_Print();
       //return ;
   } else {
@@ -723,7 +723,7 @@ void IvrPython::onNotify(AmSessionEvent* event) {
     result = PyEval_CallObject(onNotifyCallback, arglist);
     Py_DECREF(arglist);
     if (result == NULL) {
-      DBG("Calling IVR Python onNotify failed.\n");
+      DBG("Calling IVR" SCRIPT_TYPE "onNotify failed.\n");
       // PyErr_Print();
       return ;
     }
@@ -770,7 +770,7 @@ void IvrPython::onDTMFEvent(int detectedKey) {
   Py_DECREF(arglist);
 
   if (result == NULL) {
-      DBG("Calling IVR Python onMediaQueueEmpty failed.\n");
+      DBG("Calling IVR" SCRIPT_TYPE "onMediaQueueEmpty failed.\n");
       // PyErr_Print();
       //return ;
   } else {
@@ -822,7 +822,7 @@ void IvrPython::onMediaQueueEmpty() {
     Py_DECREF(arglist);
 
     if (result == NULL) {
-	DBG("Calling IVR Python onMediaQueueEmpty failed.\n");
+	DBG("Calling IVR" SCRIPT_TYPE "onMediaQueueEmpty failed.\n");
 	    // PyErr_Print();
 	//return ;
     } else {

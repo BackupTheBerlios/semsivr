@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.2 2004/06/11 16:37:36 sayer Exp $
+ * $Id: Ivr.cpp,v 1.3 2004/06/15 10:05:00 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -48,24 +48,49 @@ IvrFactory:: IvrFactory(const string& _app_name)
 int IvrFactory::onLoad(){
 	if(mIvrConfig.reloadModuleConfig(MOD_NAME) == 1){
       char* pSF = 0;
+      int flagpythonScriptPath = 0, flagdefaultPythonScriptFile = 0;
       if(((pSF = mIvrConfig.getValueForKey("python_script_path")) != NULL) && ( *pSF != '\0') ){
          setenv("PYTHONPATH",pSF,0);
          pythonScriptPath = pSF;
+         flagpythonScriptPath = 1;
          if(pythonScriptPath.rfind('/') != pythonScriptPath.length() - 1)
             pythonScriptPath += "/";
       }
-		else {
-         pythonScriptPath = "/";
-			WARN("no python_script_path in configuration\n");
-		}
+//		else {
+//         pythonScriptPath = "/";
+//			WARN("no python_script_path in configuration\n");
+//		}
 		if(((pSF = mIvrConfig.getValueForKey("python_script_file")) != NULL) && ( *pSF != '\0') ){
          defaultPythonScriptFile = pSF;
-         return 0;
+         flagdefaultPythonScriptFile = 1;
+//         return 0;
       }
-		else {
-			WARN("no python_script_file in configuration\n");
+//		else {
+//			WARN("no python_script_file in configuration\n");
+//			return -1;
+//		}
+
+	if(((pSF = mIvrConfig.getValueForKey("ivr_script_path")) != NULL) && ( *pSF != '\0') ){
+		setenv("PYTHONPATH",pSF,0);
+		pythonScriptPath = pSF;
+		if(pythonScriptPath.rfind('/') != pythonScriptPath.length() - 1)
+			pythonScriptPath += "/";
+	} else {
+		if (flagpythonScriptPath == 0) {
+			pythonScriptPath = "/";
+			WARN("no ivr_script_path in configuration\n");
+		}
+	}
+
+	if(((pSF = mIvrConfig.getValueForKey("ivr_script_file")) != NULL) && ( *pSF != '\0') ){
+		defaultPythonScriptFile = pSF;
+         return 0;
+	} else {
+		if (flagdefaultPythonScriptFile == 0) {
+			WARN("no ivr_script_file in configuration\n");
 			return -1;
 		}
+	}
 
 #ifdef IVR_WITH_TTS
 		char* p =0;
@@ -90,7 +115,7 @@ int IvrFactory::onLoad(){
 #endif
 
    }
-	return -1;
+	return 0;
 }
 
 /**
@@ -99,10 +124,14 @@ int IvrFactory::onLoad(){
  */
 AmDialogState* IvrFactory::onInvite(AmCmd& cmd){
    string pythonScriptFile = pythonScriptPath + cmd.domain	+ "/" + cmd.user + SCRIPT_FILE_EXT;
-   if(!file_exists(pythonScriptFile))
-      pythonScriptFile = pythonScriptPath + cmd.user + SCRIPT_FILE_EXT;
-      if(!file_exists(pythonScriptFile))
-	      pythonScriptFile = pythonScriptPath + defaultPythonScriptFile;
+	if(!file_exists(pythonScriptFile)) {
+		pythonScriptFile = pythonScriptPath + cmd.domain + "/" + defaultPythonScriptFile;
+		if(!file_exists(pythonScriptFile)) {
+			pythonScriptFile = pythonScriptPath + cmd.user + SCRIPT_FILE_EXT;
+			if(!file_exists(pythonScriptFile))
+				pythonScriptFile = pythonScriptPath + defaultPythonScriptFile;
+		}
+	}
 #ifndef IVR_WITH_TTS
    return new IvrDialog(pythonScriptFile);
 #else
