@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.19 2004/07/20 19:00:17 sayer Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.20 2004/07/29 10:01:07 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -453,7 +453,8 @@ int IvrAudioConnector::resumeRecording() {
 
 int IvrAudioConnector::enableDTMFDetection() {
   DBG("record connnector enabling dtmf detection...\n");
-    dtmfDetector = new IvrDtmfDetector();
+  if (!dtmfDetector)
+      dtmfDetector = new IvrDtmfDetector();
     if (!scriptEventQueue) {
       DBG("missing script event ueue!!!!!\n");
     } 
