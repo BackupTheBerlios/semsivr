@@ -4,7 +4,7 @@ PYTHON_VERSION = 2.2
 # adjust to point to python include path
 # can also be /usr/include/python$(PYTHON_VERSION)
 # look for Python.h in the specified path
-PYTHON_DIR = /usr/local/include/python$(PYTHON_VERSION)
+PYTHON_DIR = /usr/include/python$(PYTHON_VERSION)
 
 # uncomment the next two lines if you want to script the ivr with perl scripts
 #IVR_PERL_module_ldflags = `perl -MExtUtils::Embed -e ldopts` -DPERL_IMPLICIT_CONTEXT
