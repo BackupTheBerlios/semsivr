@@ -1,5 +1,5 @@
 /*
- * $Id: Ivr.cpp,v 1.11 2004/07/01 16:18:38 sayer Exp $
+ * $Id: Ivr.cpp,v 1.12 2004/07/02 06:28:34 zrichard Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -198,7 +198,7 @@ void IvrDialog::onSessionStart(AmRequest* req){
   // plug on our media handler (in and out)
   DBG("Start duplex...\n");
   ivrPython->pAmSession->rtp_str.duplex(mediaHandler->getPlayConnector(),
-					mediaHandler->getRecordConnector());
+					mediaHandler->getRecordConnector(), -1);
    
   DBG("End duplex.\n");
   
