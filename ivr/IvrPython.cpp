@@ -1,5 +1,5 @@
 /*
- * $Id: IvrPython.cpp,v 1.8 2004/06/29 15:50:59 sayer Exp $
+ * $Id: IvrPython.cpp,v 1.9 2004/06/30 10:39:35 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -234,9 +234,9 @@ extern "C" {
 	gettimeofday(&tvStart,0);
 	while(timediff < (unsigned int) stime*1000000){
 	  usleep(10);
-	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
-	  if (evq)
-	    evq->processEvents();
+ 	  AmEventQueue* evq = pIvrPython->getScriptEventQueue();
+ 	  if (evq)
+ 	    evq->processEvents();
 	  gettimeofday(&tvNow,0);
 	  timediff = (tvNow.tv_sec - tvStart.tv_sec)* 1000000 + (tvNow.tv_usec - tvStart.tv_usec);
 	}
@@ -592,7 +592,14 @@ void IvrPython::setNoUnregisterScriptQueue() {
 extern "C" {
   int pythonTrace(PyObject* mobj, PyFrameObject *mframe, int mwhat, PyObject *marg) {
     // DBG("Python trace\n");
-    IvrPython* pIvrPython = getIvrPythonPointer();
+    IvrPython* pIvrPython = 0; //getIvrPythonPointer();
+    if (mobj != NULL){
+      if (PyCObject_Check(mobj)) {
+	  pIvrPython = (IvrPython*)PyCObject_AsVoidPtr(mobj);
+	  //	  Py_DECREF(mobj);
+      }
+    }
+
     if (pIvrPython) {
       AmEventQueue* evq = pIvrPython->getScriptEventQueue();
       if (evq)
@@ -669,8 +676,9 @@ void IvrPython::run(){
        PyObject* ivrPythonPointer = PyCObject_FromVoidPtr((void*)this,NULL);
        if (ivrPythonPointer != NULL)
 	 PyModule_AddObject(ivrPyInitModule, "ivrPythonPointer", ivrPythonPointer);
+       
        Py_tracefunc tmp_t = pythonTrace;
-       PyEval_SetTrace(tmp_t, 0);
+       PyEval_SetTrace(tmp_t, PyCObject_FromVoidPtr((void*)this,NULL));
        if(!PyRun_SimpleFile(fp,(char*)fileName)){
 	 fclose(fp);
 	 retval = 0;// true;
