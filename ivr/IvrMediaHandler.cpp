@@ -1,5 +1,5 @@
 /*
- * $Id: IvrMediaHandler.cpp,v 1.13 2004/07/05 17:01:45 sayer Exp $
+ * $Id: IvrMediaHandler.cpp,v 1.14 2004/07/05 18:30:06 sayer Exp $
  * Copyright (C) 2002-2003 Fhg Fokus
  *
  * This file is part of sems, a free SIP media server.
@@ -324,9 +324,10 @@ int IvrAudioConnector::streamGet(unsigned int user_ts, unsigned int size) {
   int ret = activeMedia->streamGetRaw(user_ts, size);
   //		DBG("Got %d.", ret);
   while (ret<0) {
-    activeMedia = mediaHandler->getNewOutMedia();
+    setActiveMedia(mediaHandler->getNewOutMedia());
     if (!activeMedia)
       return 0;
+
     ret = activeMedia->streamGetRaw(user_ts, size);
   }
   
