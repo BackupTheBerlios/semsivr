@@ -1,4 +1,4 @@
-/* $Id: nathelper.c,v 1.1 2006/02/14 21:13:11 sayer Exp $
+/* $Id: nathelper.c,v 1.2 2006/02/16 23:23:11 clona Exp $
  *
  * Copyright (C) 2003 Porta Software Ltd
  *
@@ -227,7 +227,7 @@ static int fix_nated_contact_f(struct sip_msg *, char *, char *);
 static int fix_nated_sdp_f(struct sip_msg *, char *, char *);
 static int extract_mediaip(str *, str *, int *);
 static int extract_mediaport(str *, str *);
-static int alter_mediaipP(struct sip_msg *, str *, str *, int, str *, int, int);
+static int alter_mediaip(struct sip_msg *, str *, str *, int, str *, int, int);
 static int alter_mediaport(struct sip_msg *, str *, str *, str *, int);
 static char *gencookie();
 static int rtpp_test(struct rtpp_node*, int, int);
@@ -2179,18 +2179,19 @@ fix_nated_register_f(struct sip_msg* msg, char* str1, char* str2)
 
 force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 {
-	str body, body1, oldport, oldip, newport, newip;
+	str body, oldport, oldip, newip;
 	char *newfancybody = malloc(600);
+	str codec;
 	str callid, from_tag, to_tag, tmp;
-	int create, port, len, asymmetric, flookup, argc, proxied, real;
-	int oidx, pf, pf1, force, node_idx;
+	int create, len, port, asymmetric, flookup, argc, proxied, real;
+	int oidx, pf, force, node_idx;
 	char opts[16];
 	char *cp, *cp1;
 	char  *cpend, *next;
 	char **ap, *argv[10];
 	struct lump* anchor;
 	struct rtpp_node *node;
-	struct iovec v[14] = {
+	struct iovec v[16] = {
 		{NULL, 0},	/* command */
 		{NULL, 0},	/* options */
 		{" ", 1},	/* separator */
@@ -2204,7 +2205,9 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 		{";", 1},	/* separator */
 		{NULL, 0},	/* medianum */
 		{" ", 1},	/* separator */
-		{NULL, 0}	/* to_tag */
+		{NULL, 0},	/* to_tag */
+		{":", 1},	/* Seperator */
+		{NULL, 0}	/* codec_info */
 	};
 	char *v1p, *v2p, *c1p, *c2p, *m1p, *m2p, *bodylimit;
 	char medianum_buf[20];
@@ -2228,9 +2231,14 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 			break;
 		case 'G':
 			str1= "RTP/AVP 3\r\n";
+
+			codec.s = "3";
+                        codec.len = strlen(codec.s);
 			break;
 		default:
 			str1 = "RTP/AVP 0\r\n";
+			codec.s = "0";
+                        codec.len = strlen(codec.s);
 			break;
 		}
 	}
@@ -2379,7 +2387,7 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 			snprintf(medianum_buf, sizeof medianum_buf, "%d", medianum);
 			medianum_str.s = medianum_buf;
 			medianum_str.len = strlen(medianum_buf);
-			opts[0] = (create == 0) ? 'L' : 'U';
+			opts[0] = (create == 0) ? 't' : 'T';
 			v[1].iov_len = oidx;
 			STR2IOVEC(callid, v[3]);
 			STR2IOVEC(newip, v[5]);
@@ -2392,13 +2400,15 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 				v[10].iov_len = v[11].iov_len = 0;
 			}
 			STR2IOVEC(to_tag, v[13]);
+			STR2IOVEC(codec, v[15]);
 			do {
 				node = select_rtpp_node(callid, 1, node_idx);
 				if (!node) {
 					LOG(L_ERR, "ERROR: force_rtp_proxy2: no available proxies\n");
 					return -1;
 				}
-				cp = send_rtpp_command(node, v, (to_tag.len > 0) ? 14 : 12);
+				cp = send_rtpp_command(node, v, (to_tag.len > 0) ? 16 : 16); 	/* XXX Fix me at some time */
+												/* It's here to test */
 			} while (cp == NULL);
 			LOG(L_DBG, "force_rtp_proxy2: proxy reply: %s\n", cp);
 			/* Parse proxy reply to <argc,argv> */
