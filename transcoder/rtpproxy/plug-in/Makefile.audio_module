@@ -1,4 +1,4 @@
-include ../../Makefile.defs
+include ../Makefile.defs
 
 ldflags = -shared $(module_ldflags)
 cflags  = -fPIC -I ../../amci -Wall $(module_cflags) $(CFLAGS)
