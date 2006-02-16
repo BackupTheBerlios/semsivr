@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: main.c,v 1.1 2006/02/16 19:33:05 sayer Exp $
+ * $Id: main.c,v 1.2 2006/02/16 23:21:46 clona Exp $
  *
  */
 
@@ -350,7 +350,7 @@ handle_command(int controlfd)
 
     char payload_id_caller, codec_id_caller, payload_id_callee, codec_id_callee;
     char* fmt_param_caller, *fmt_param_callee;
-    int do_transcoder;
+    int do_transcoder = 0;
     
 #define	doreply() \
     { \
@@ -438,6 +438,14 @@ handle_command(int controlfd)
 	codecs = argv[3];
 	break;
 
+    case 'T':
+        request = 1;
+        do_transcoder = 1;
+	break;
+    case 't':
+	response =1;
+	do_transcoder = 1;
+	break; 
     case 'r':
     case 'R':
         record = 1;
@@ -549,7 +557,7 @@ handle_command(int controlfd)
     codec_id_callee    = CODEC_ULAW;
     fmt_param_callee   = "";
 
-    do_transcoder = 1;
+
 
     call_id = argv[1];
     if (request != 0 || response != 0 || play != 0) {
