@@ -1,4 +1,4 @@
-/* $Id: nathelper.c,v 1.2 2006/02/16 23:23:11 clona Exp $
+/* $Id: nathelper.c,v 1.3 2006/02/18 14:42:47 clona Exp $
  *
  * Copyright (C) 2003 Porta Software Ltd
  *
@@ -2227,13 +2227,14 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 
                 case 'I':
 			str1 = "RTP/AVP 98\r\na=ptime:110 30\r\na=rtpmap:98 ilbc/8000\r\na=fmtp:98 mode=30\r\n";
-			LOG(L_ERR, "Case 10 I hope : %s .. \r\n",str1);
 			break;
 		case 'G':
 			str1= "RTP/AVP 3\r\n";
-
 			codec.s = "3";
                         codec.len = strlen(codec.s);
+			break;
+		case 'W':
+			str1 = "RTP/AVP 110\r\na=ptime:110 20\r\na=rtpmap:110 g7222/16000\r\n";
 			break;
 		default:
 			str1 = "RTP/AVP 0\r\n";
