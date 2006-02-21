@@ -1,4 +1,4 @@
-/* $Id: nathelper.c,v 1.3 2006/02/18 14:42:47 clona Exp $
+/* $Id: nathelper.c,v 1.4 2006/02/21 01:57:42 sayer Exp $
  *
  * Copyright (C) 2003 Porta Software Ltd
  *
@@ -2176,7 +2176,7 @@ fix_nated_register_f(struct sip_msg* msg, char* str1, char* str2)
 }
 
 
-
+static int
 force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 {
 	str body, oldport, oldip, newip;
@@ -2226,10 +2226,10 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 			break;
 
                 case 'I':
-			str1 = "RTP/AVP 98\r\na=ptime:110 30\r\na=rtpmap:98 ilbc/8000\r\na=fmtp:98 mode=30\r\n";
+			str1 = "RTP/AVP 98\r\na=ptime:110 30\r\na=rtpmap:98 iLBC/8000\r\na=fmtp:98 mode=30\r\n";
 			break;
 		case 'G':
-			str1= "RTP/AVP 3\r\n";
+			str1= "RTP/AVP 3\r\na=rtpmap:3 GSM/8000\r\n";
 			codec.s = "3";
                         codec.len = strlen(codec.s);
 			break;
@@ -2237,7 +2237,7 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 			str1 = "RTP/AVP 110\r\na=ptime:110 20\r\na=rtpmap:110 g7222/16000\r\n";
 			break;
 		default:
-			str1 = "RTP/AVP 0\r\n";
+			str1 = "RTP/AVP 0\r\na=rtpmap:0 PCMU/8000\r\n";
 			codec.s = "0";
                         codec.len = strlen(codec.s);
 			break;
