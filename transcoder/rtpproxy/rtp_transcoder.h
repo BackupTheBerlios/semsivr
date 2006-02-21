@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: rtp_transcoder.h,v 1.1 2006/02/16 19:56:37 sayer Exp $
+ * $Id: rtp_transcoder.h,v 1.2 2006/02/21 01:56:11 sayer Exp $
  *
  */
 
@@ -39,9 +39,17 @@ struct rtp_transcoder {
 
   long handle_from;
   struct amci_codec_t* codec_from;
+  unsigned int from_framelength;
+  unsigned int from_encodedsize;
 
   long handle_to;
   struct amci_codec_t* codec_to;  
+  unsigned int to_framelength;
+  unsigned int to_encodedsize;
+
+  char pcmbuf[1024*10];
+  unsigned int last_seq;
+  char* audio_end;
 };
 
 struct rtp_transcoder *rtp_transcoder_new(char from_payload_id, int from_codec_id, 

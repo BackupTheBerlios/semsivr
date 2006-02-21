@@ -23,9 +23,10 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: rtp_transcoder.c,v 1.1 2006/02/16 19:56:37 sayer Exp $
+ * $Id: rtp_transcoder.c,v 1.2 2006/02/21 01:56:11 sayer Exp $
  *
  */
+#include <stdlib.h>
 
 #include "rtpp_util.h"
 #include "rtp.h"
@@ -67,7 +68,8 @@ int rtp_transcoder_update(struct rtp_transcoder* rt,
 			  char to_payload_id,   int to_codec_id,
 			  char* format_parameters_to) {
 
-  amci_codec_fmt_info_t fmtinfo[4];
+  amci_codec_fmt_info_t fmtinfo[8];
+  unsigned int i;
 
   if (from_codec_id) {
     // free the old codec...
@@ -80,11 +82,24 @@ int rtp_transcoder_update(struct rtp_transcoder* rt,
     if (rt->codec_from == NULL) 
       return 0;
     // init the codec
-    if (rt->codec_from->init != NULL)
+    if (rt->codec_from->init != NULL) {
       rt->handle_from = rt->codec_from->init(format_parameters_from, 
 					     fmtinfo);
+      for (i=0; fmtinfo[i].id!=0;i++) {
+	if (fmtinfo[i].id == AMCI_FMT_FRAME_SIZE) {
+	  rt->from_framelength = fmtinfo[i].value * 2; // sizeof(PCM16)
+	      rtpp_log_write(RTPP_LOG_INFO, sp->log, // DEBUG
+		   "transcode_init: from_framelength %d\n",
+		   rt->from_framelength);
+
+	}
+	if (fmtinfo[i].id == AMCI_FMT_ENCODED_FRAME_SIZE) {
+	  rt->from_encodedsize = fmtinfo[i].value;
+	}
+      }  
+    }
     rtpp_log_write(RTPP_LOG_INFO, glog, "rtp_trancoder_update: from %d/%d\n", 
-	    to_codec_id, to_payload_id);
+		   to_codec_id, to_payload_id);
   }
   
   if (to_codec_id) {
@@ -92,18 +107,34 @@ int rtp_transcoder_update(struct rtp_transcoder* rt,
     if ((rt->codec_to != NULL) && (rt->codec_to->destroy != NULL))
       rt->codec_to->destroy(rt->handle_to);
 
+    memset(fmtinfo, 0, sizeof(*fmtinfo));
+
     rt->to_payload_id   = to_payload_id;
     // get the codec
     rt->codec_to   = am_plugin_get_codec(to_codec_id);
     if (rt->codec_to == NULL) 
       return 0;
     // init the codecs
-    if (rt->codec_to->init != NULL)
+    if (rt->codec_to->init != NULL) {
       rt->handle_to = rt->codec_to->init(format_parameters_to, 
 					 fmtinfo);
+      for (i=0; fmtinfo[i].id!=0;i++) {
+	if (fmtinfo[i].id == AMCI_FMT_FRAME_SIZE) {
+	  rt->to_framelength = fmtinfo[i].value * 2; // sizeof(PCM16);
+	  rtpp_log_write(RTPP_LOG_INFO, sp->log, // DEBUG
+			 "transcode_init: to_framelength %d\n",
+			 rt->to_framelength);
+	}
+	if (fmtinfo[i].id == AMCI_FMT_ENCODED_FRAME_SIZE) {
+	  rt->to_encodedsize = fmtinfo[i].value;
+	}
+      }  
+    }
     rtpp_log_write(RTPP_LOG_INFO, glog, "rtp_trancoder_update: to %d/%d\n", 
 	    to_codec_id, to_payload_id);
   }
+
+  rt->audio_end = rt->pcmbuf;
 
   return 1;
 }
@@ -120,10 +151,13 @@ void rtp_transcoder_free(struct rtp_transcoder *rt) {
 int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp, 
 			     char* buf, int* len) {
 
-  char pcmbuf[1024*4];
-  int newlen; 
-  char* audio_offset;
+
+  int audio_len; 
+  char* rtpp_audio_offset;
   rtp_hdr_t *rtp;
+  char* audio_begin;
+  char* audio_encoded;
+  div_t blocks;
   
   if ((rt->codec_from == NULL) || (rt->codec_to == NULL)) {
     rtpp_log_write(RTPP_LOG_ERR, sp->log,
@@ -132,36 +166,71 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
   }
   
   rtp = (rtp_hdr_t *)buf;
-  audio_offset = buf + RTP_HDR_LEN(rtp);
   
   if (rtp->pt != rt->from_payload_id) {
     rtpp_log_write(RTPP_LOG_INFO, sp->log,
-		   "transcode: expected payload %d, received %d\n",rt->from_payload_id, rtp->pt );
+		   "transcode: expected payload %d, received %d\n",
+		   rt->from_payload_id, rtp->pt );
     return 0;
   }
 
-  newlen = *len - RTP_HDR_LEN(rtp);
-  newlen = rt->codec_from->type2intern(pcmbuf, audio_offset, newlen, 1, 8000, rt->handle_from);
-  if (newlen <= 0) {
-    if (newlen < 0) 
+  rtpp_audio_offset = buf + RTP_HDR_LEN(rtp);
+  if (rtp->m || (rtp->seq != rt->last_seq+1)) {
+    rtpp_log_write(RTPP_LOG_INFO, sp->log,
+		   "transcode: packetloss (%u, %u)\n",
+		 rtp->seq , rt->last_seq+1 );
+    // rt->audio_end = rt->pcmbuf; // packet loss -> drop buffered audio
+    // FIXME why doesnt this work?
+  }
+  rt->last_seq  =  rtp->seq;
+
+  audio_len = *len - RTP_HDR_LEN(rtp);
+  rtpp_log_write(RTPP_LOG_INFO, sp->log, // DEBUG
+		 "transcode: got packet with audio length %d (buffer %d)\n",
+		 audio_len, rt->audio_end - rt->pcmbuf);
+  audio_len = rt->codec_from->type2intern(rt->audio_end, rtpp_audio_offset, audio_len, 
+					  1, 8000, rt->handle_from);
+  if (audio_len <= 0) {
+    if (audio_len < 0) 
       rtpp_log_write(RTPP_LOG_ERR, sp->log,
 		     "transcode: codec_from->type2intern failed.");
     return 0;
   }
 
-  newlen = rt->codec_to->intern2type(audio_offset, pcmbuf, newlen, 1, 8000, rt->handle_to);
-  if (newlen <= 0) {
-    if (newlen < 0) 
+  rt->audio_end += audio_len;
+
+  if (rt->to_framelength) {
+    audio_begin = rt->pcmbuf;
+    blocks = div(rt->audio_end - rt->pcmbuf, rt->to_framelength);
+
+    if (blocks.quot)
+      audio_len = rt->codec_to->intern2type(rtpp_audio_offset, rt->pcmbuf, blocks.quot * rt->to_framelength, 
+					    1, 8000, rt->handle_to);
+    else 
+      audio_len = 0;
+    if (blocks.rem) {
+      memcpy(rt->pcmbuf, rt->pcmbuf +  blocks.quot * rt->to_framelength, blocks.rem);
+    }
+    rt->audio_end = rt->pcmbuf + blocks.rem;
+
+  } else {
+    audio_len = rt->codec_to->intern2type(rtpp_audio_offset, rt->pcmbuf, rt->audio_end - rt->pcmbuf, 
+					  1, 8000, rt->handle_to);
+    rt->audio_end = rt->pcmbuf; // clear buffer
+  }
+  if (audio_len <= 0) {
+    if (audio_len < 0) 
       rtpp_log_write(RTPP_LOG_ERR, sp->log,
 		     "transcode: codec_to->intern2type failed.");
     return 0;
   }
 
   rtpp_log_write(RTPP_LOG_INFO, sp->log,
-		 "transcode from payload %d to %d, size %d to %d.",
-		 rt->from_payload_id, rt->to_payload_id, *len, newlen + RTP_HDR_LEN(rtp));
+		 "transcode from payload %d to %d, size %d to %d (buffering %d).",
+		 rt->from_payload_id, rt->to_payload_id, *len, 
+		 audio_len + RTP_HDR_LEN(rtp), rt->audio_end - rt->pcmbuf);
   
-  *len = newlen + RTP_HDR_LEN(rtp);
+  *len = audio_len + RTP_HDR_LEN(rtp);
   
   rtp->pt = rt->to_payload_id;
   return 1;

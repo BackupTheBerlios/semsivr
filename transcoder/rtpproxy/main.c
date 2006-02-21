@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: main.c,v 1.2 2006/02/16 23:21:46 clona Exp $
+ * $Id: main.c,v 1.3 2006/02/21 01:56:09 sayer Exp $
  *
  */
 
@@ -549,12 +549,12 @@ handle_command(int controlfd)
     }
 
     // added for testing
-    payload_id_caller  = 3;
-    codec_id_caller    = CODEC_GSM0610;
-    fmt_param_caller   = "mode=20";
+    payload_id_caller  = 98; //3;
+    codec_id_caller    = CODEC_ILBC; //CODEC_GSM0610;
+    fmt_param_caller   = "mode=30";
 
-    payload_id_callee  = 0;
-    codec_id_callee    = CODEC_ULAW;
+    payload_id_callee  = 3; //98;
+    codec_id_callee    = CODEC_GSM0610; //CODEC_ILBC;
     fmt_param_callee   = "";
 
 
@@ -907,10 +907,10 @@ handle_command(int controlfd)
     // create transcoder if set 
 
     if (do_transcoder) {
-      spa->rtpt[0] = rtp_transcoder_new(payload_id_caller, codec_id_caller, fmt_param_caller,
-				       payload_id_callee, codec_id_callee, fmt_param_callee);
-      spa->rtpt[1] = rtp_transcoder_new(payload_id_callee, codec_id_callee, fmt_param_callee,
+      spa->rtpt[0] = rtp_transcoder_new(payload_id_callee, codec_id_callee, fmt_param_callee,
 					payload_id_caller, codec_id_caller, fmt_param_caller);
+      spa->rtpt[1] = rtp_transcoder_new(payload_id_caller, codec_id_caller, fmt_param_caller,
+				       payload_id_callee, codec_id_callee, fmt_param_callee);
     }
 
     LIST_INSERT_HEAD(&session_set, spa, link);
