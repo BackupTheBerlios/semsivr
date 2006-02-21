@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: rtp_transcoder.h,v 1.2 2006/02/21 01:56:11 sayer Exp $
+ * $Id: rtp_transcoder.h,v 1.3 2006/02/21 16:51:45 sayer Exp $
  *
  */
 
@@ -48,7 +48,7 @@ struct rtp_transcoder {
   unsigned int to_encodedsize;
 
   char pcmbuf[1024*10];
-  unsigned int last_seq;
+  unsigned short last_seq;
   char* audio_end;
 };
 

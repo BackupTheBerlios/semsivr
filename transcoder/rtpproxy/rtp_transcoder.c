@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: rtp_transcoder.c,v 1.2 2006/02/21 01:56:11 sayer Exp $
+ * $Id: rtp_transcoder.c,v 1.3 2006/02/21 16:51:45 sayer Exp $
  *
  */
 #include <stdlib.h>
@@ -158,6 +158,8 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
   char* audio_begin;
   char* audio_encoded;
   div_t blocks;
+  unsigned short seqno;
+  unsigned short* seqnop;
   
   if ((rt->codec_from == NULL) || (rt->codec_to == NULL)) {
     rtpp_log_write(RTPP_LOG_ERR, sp->log,
@@ -175,14 +177,14 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
   }
 
   rtpp_audio_offset = buf + RTP_HDR_LEN(rtp);
-  if (rtp->m || (rtp->seq != rt->last_seq+1)) {
-    rtpp_log_write(RTPP_LOG_INFO, sp->log,
-		   "transcode: packetloss (%u, %u)\n",
-		 rtp->seq , rt->last_seq+1 );
-    // rt->audio_end = rt->pcmbuf; // packet loss -> drop buffered audio
-    // FIXME why doesnt this work?
+  if (rtp->m || (RTP_GET_SEQ(rtp) != rt->last_seq+1)) {
+    if (rt->last_seq)
+      rtpp_log_write(RTPP_LOG_INFO, sp->log,
+		     "transcode: packetloss (%u, %u)\n",
+		     rtp->seq , rt->last_seq+1 );
+     rt->audio_end = rt->pcmbuf; // packet loss -> drop buffered audio
   }
-  rt->last_seq  =  rtp->seq;
+  rt->last_seq  =  RTP_GET_SEQ(rtp);
 
   audio_len = *len - RTP_HDR_LEN(rtp);
   rtpp_log_write(RTPP_LOG_INFO, sp->log, // DEBUG
