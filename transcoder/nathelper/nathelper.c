@@ -1,4 +1,4 @@
-/* $Id: nathelper.c,v 1.4 2006/02/21 01:57:42 sayer Exp $
+/* $Id: nathelper.c,v 1.5 2006/02/21 23:58:42 sayer Exp $
  *
  * Copyright (C) 2003 Porta Software Ltd
  *
@@ -2206,7 +2206,7 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 		{NULL, 0},	/* medianum */
 		{" ", 1},	/* separator */
 		{NULL, 0},	/* to_tag */
-		{":", 1},	/* Seperator */
+		{" ", 1},	/* Seperator */
 		{NULL, 0}	/* codec_info */
 	};
 	char *v1p, *v2p, *c1p, *c2p, *m1p, *m2p, *bodylimit;
@@ -2216,7 +2216,7 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 	int c1p_altered;
 
 	v[1].iov_base=opts;
-	asymmetric = flookup = force = real = 0;
+	asymmetric = flookup = force = real = port = 0;
 	oidx = 1;
 	node_idx = -1;
 	for (cp = str1; *cp != '\0'; cp++) {
@@ -2226,19 +2226,40 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 			break;
 
                 case 'I':
-			str1 = "RTP/AVP 98\r\na=ptime:110 30\r\na=rtpmap:98 iLBC/8000\r\na=fmtp:98 mode=30\r\n";
+			str1 = "RTP/AVP 98\r\na=rtpmap:98 iLBC/8000\r\na=fmtp:98 mode=30\r\n";
+			codec.s = "98 4 mode=30";
+                        codec.len = strlen(codec.s);
+			break;
+                case 'i':
+			str1 = "RTP/AVP 98\r\na=rtpmap:98 iLBC/8000\r\na=fmtp:98 mode=20\r\n";
+			codec.s = "98 4 mode=20";
+                        codec.len = strlen(codec.s);
 			break;
 		case 'G':
 			str1= "RTP/AVP 3\r\na=rtpmap:3 GSM/8000\r\n";
-			codec.s = "3";
+			codec.s = "3 3 *";
                         codec.len = strlen(codec.s);
 			break;
 		case 'W':
 			str1 = "RTP/AVP 110\r\na=ptime:110 20\r\na=rtpmap:110 g7222/16000\r\n";
+			codec.s = "9 5 *";
+                        codec.len = strlen(codec.s);
 			break;
+		case 'A':
+		        str1 = "RTP/AVP 8\r\na=rtpmap:0 PCMA/8000\r\n";
+		        codec.s = "8 2 *";
+		        codec.len = strlen(codec.s);
+		        break;
+		case 'S':
+		        str1 = "RTP/AVP 97\r\na=rtpmap:97 speex/8000\r\n";
+		        codec.s = "97 6 *";
+		        codec.len = strlen(codec.s);
+		        break;
+
+		case 'U':
 		default:
 			str1 = "RTP/AVP 0\r\na=rtpmap:0 PCMU/8000\r\n";
-			codec.s = "0";
+			codec.s = "0 1 *";
                         codec.len = strlen(codec.s);
 			break;
 		}
@@ -2441,7 +2462,9 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 
 
 	if (proxied == 0) {
-		sprintf(newfancybody, "v=0\r\no=- 1383514984 1383515221 IN IP4 %s\r\ns=SER transcoder\r\nc=IN IP4 %s\r\nt=0 0\r\nm=audio %i %s",str2,str2,port,str1);	
+ 	        sprintf(newfancybody, "v=0\r\no=- 1383514984 1383515221 IN IP4 %s\r\n"
+			"s=SER transcoder\r\nc=IN IP4 %s\r\n"
+			"t=0 0\r\nm=audio %i %s",str2,str2,port,str1);	
 		cp = pkg_malloc(strlen(newfancybody) * sizeof(char));
 		if (cp == NULL) {
 			LOG(L_ERR, "ERROR: force_rtp_proxy2: out of memory\n");
