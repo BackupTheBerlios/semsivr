@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: main.c,v 1.3 2006/02/21 01:56:09 sayer Exp $
+ * $Id: main.c,v 1.4 2006/02/21 23:57:38 sayer Exp $
  *
  */
 
@@ -342,6 +342,8 @@ handle_command(int controlfd)
     char buf[1024 * 8];
     char *cp, *call_id, *from_tag, *to_tag, *addr, *port, *cookie;
     char *pname, *codecs;
+    char payload_id, codec_id;
+    char *codec_fmt_param;
     struct rtpp_session *spa, *spb, *spnext;
     char **ap, *argv[10];
     const char *rname;
@@ -350,7 +352,7 @@ handle_command(int controlfd)
 
     char payload_id_caller, codec_id_caller, payload_id_callee, codec_id_callee;
     char* fmt_param_caller, *fmt_param_callee;
-    int do_transcoder = 0;
+    int transcode;
     
 #define	doreply() \
     { \
@@ -412,7 +414,7 @@ handle_command(int controlfd)
 	cookie = NULL;
     }
 
-    request = response = delete = play = record = noplay = 0;
+    request = response = delete = play = record = noplay = transcode = 0;
     addr = port = NULL;
     switch (argv[0][0]) {
     case 'u':
@@ -439,13 +441,35 @@ handle_command(int controlfd)
 	break;
 
     case 'T':
-        request = 1;
-        do_transcoder = 1;
-	break;
+      if (argc != 8) {
+	rtpp_log_write(RTPP_LOG_ERR, glog, "command syntax error (T)");
+	ecode = 4;
+	goto goterror;
+      }
+      request = 1;
+      transcode = 1;
+      payload_id = atoi(argv[5]);
+      codec_id = atoi(argv[6]);
+      codec_fmt_param = argv[7];
+      rtpp_log_write(RTPP_LOG_ERR, glog, "command T payload %d codec %d fmtpar %s",
+		     payload_id, codec_id, codec_fmt_param);
+      break;
+
     case 't':
-	response =1;
-	do_transcoder = 1;
-	break; 
+      if (argc != 9) {
+	rtpp_log_write(RTPP_LOG_ERR, glog, "command syntax error (t)");
+	ecode = 4;
+	goto goterror;
+      }
+      response = 1;
+      transcode = 1;
+      payload_id = atoi(argv[6]);
+      codec_id = atoi(argv[7]);
+      codec_fmt_param = argv[8];
+      rtpp_log_write(RTPP_LOG_ERR, glog, "command t payload %d codec %d fmtpar %s",
+		     payload_id, codec_id, codec_fmt_param);
+      break; 
+      
     case 'r':
     case 'R':
         record = 1;
@@ -549,19 +573,17 @@ handle_command(int controlfd)
     }
 
     // added for testing
-    payload_id_caller  = 98; //3;
-    codec_id_caller    = CODEC_ILBC; //CODEC_GSM0610;
-    fmt_param_caller   = "mode=30";
+/*     payload_id_callee  = 98; //3; */
+/*     codec_id_callee    = CODEC_ILBC; //CODEC_GSM0610; */
+/*     fmt_param_callee   = "mode=30"; */
 
-    payload_id_callee  = 3; //98;
-    codec_id_callee    = CODEC_GSM0610; //CODEC_ILBC;
-    fmt_param_callee   = "";
-
-
+/*     payload_id_caller  = 0;          //3;            //98; */
+/*     codec_id_caller    = CODEC_ULAW;//CODEC_GSM0610; //CODEC_ILBC; */
+/*     fmt_param_caller   = ""; */
 
     call_id = argv[1];
     if (request != 0 || response != 0 || play != 0) {
-	if (argc < 5 || argc > 6) {
+      if ((transcode == 0) && (argc < 5 || argc > 6)) { 
 	    rtpp_log_write(RTPP_LOG_ERR, glog, "command syntax error");
 	    ecode = 4;
 	    goto goterror;
@@ -771,6 +793,28 @@ handle_command(int controlfd)
 	    goto do_ok;
 	}
 
+	
+	if (transcode != 0) {
+	  if (request) { 
+	    // codec of caller unknown
+	    rtp_transcoder_update(spa->rtpt[0], 
+				  payload_id, codec_id, codec_fmt_param,
+				  0, 0, "");
+	    rtp_transcoder_update(spa->rtpt[1], 
+				  0, 0, "", 
+				  payload_id, codec_id, codec_fmt_param);
+	  } else {
+	    // codec of callee unknown
+	    rtp_transcoder_update(spa->rtpt[0],
+				  0, 0, "",
+				  payload_id, codec_id, codec_fmt_param);
+	    rtp_transcoder_update(spa->rtpt[1], 
+				  payload_id, codec_id, codec_fmt_param,
+				  0, 0, "");
+	  }
+	}
+    
+
 	if (response == 1 && spa->complete == 0) {
 	    j = ishostseq(bindaddr[0], spa->laddr[i]) ? 0 : 1;
 	    if (create_listener(spa->laddr[i], PORT_MIN, PORT_MAX,
@@ -904,13 +948,21 @@ handle_command(int controlfd)
     spa->rtp = NULL;
     spb->rtp = spa;
 
-    // create transcoder if set 
-
-    if (do_transcoder) {
-      spa->rtpt[0] = rtp_transcoder_new(payload_id_callee, codec_id_callee, fmt_param_callee,
-					payload_id_caller, codec_id_caller, fmt_param_caller);
-      spa->rtpt[1] = rtp_transcoder_new(payload_id_caller, codec_id_caller, fmt_param_caller,
-				       payload_id_callee, codec_id_callee, fmt_param_callee);
+    // create transcoder if transcode
+    if (transcode != 0) {
+      if (request) { 
+	// codec of caller unknown
+	spa->rtpt[0] = rtp_transcoder_new(payload_id, codec_id, codec_fmt_param,
+					  0, 0, "");
+	spa->rtpt[1] = rtp_transcoder_new(0, 0, "", 
+					  payload_id, codec_id, codec_fmt_param);
+      } else {
+	// codec of callee unknown
+	spa->rtpt[0] = rtp_transcoder_new(0, 0, "",
+					  payload_id, codec_id, codec_fmt_param);
+	spa->rtpt[1] = rtp_transcoder_new(payload_id, codec_id, codec_fmt_param,
+					  0, 0, "");
+      }
     }
 
     LIST_INSERT_HEAD(&session_set, spa, link);
