@@ -1,4 +1,4 @@
-/* $Id: nathelper.c,v 1.5 2006/02/21 23:58:42 sayer Exp $
+/* $Id: nathelper.c,v 1.6 2006/02/22 21:16:13 sayer Exp $
  *
  * Copyright (C) 2003 Porta Software Ltd
  *
@@ -2278,20 +2278,20 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 	 * -- andrei */
 
 	if (extract_body(msg, &body) == -1) {
-		LOG(L_ERR, "ERROR: force_rtp_proxy2: can't extract body "
+		LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't extract body "
 		    "from the message\n");
 		return -1;
 	}
 	if (get_callid(msg, &callid) == -1 || callid.len == 0) {
-		LOG(L_ERR, "ERROR: force_rtp_proxy2: can't get Call-Id field\n");
+		LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't get Call-Id field\n");
 		return -1;
 	}
 	if (get_to_tag(msg, &to_tag) == -1) {
-		LOG(L_ERR, "ERROR: force_rtp_proxy2: can't get To tag\n");
+		LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't get To tag\n");
 		return -1;
 	}
 	if (get_from_tag(msg, &from_tag) == -1 || from_tag.len == 0) {
-		LOG(L_ERR, "ERROR: force_rtp_proxy2: can't get From tag\n");
+		LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't get From tag\n");
 		return -1;
 	}
 	if (flookup != 0) {
@@ -2333,7 +2333,7 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 	bodylimit = body.s + body.len;
 	v1p = find_sdp_line(body.s, bodylimit, 'v');
 	if (v1p == NULL) {
-		LOG(L_ERR, "ERROR: force_rtp_proxy2: no sessions in SDP\n");
+		LOG(L_ERR, "ERROR: force_rtp_transcode2_f: no sessions in SDP\n");
 		return -1;
 	}
 
@@ -2354,7 +2354,7 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 		/* Have this session media description? */
 
 		if (m1p == NULL) {
-			LOG(L_ERR, "ERROR: force_rtp_proxy2: no m= in session\n");
+			LOG(L_ERR, "ERROR: force_rtp_transcode2_f: no m= in session\n");
 			return -1;
 		}
 		/*
@@ -2377,20 +2377,20 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 			tmpstr1.s = c2p ? c2p : c1p;
 			if (tmpstr1.s == NULL) {
 				/* No "c=" */
-				LOG(L_ERR, "ERROR: force_rtp_proxy2: can't"
+				LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't"
 				    " find media IP in the message\n");
 				return -1;
 			}
 			tmpstr1.len = v2p - tmpstr1.s; /* limit is session limit text */
 			if (extract_mediaip(&tmpstr1, &oldip, &pf) == -1) {
-				LOG(L_ERR, "ERROR: force_rtp_proxy2: can't"
+				LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't"
 				    " extract media IP from the message\n");
 				return -1;
 			}
 			tmpstr1.s = m1p;
 			tmpstr1.len = m2p - m1p;
 			if (extract_mediaport(&tmpstr1, &oldport) == -1) {
-				LOG(L_ERR, "ERROR: force_rtp_proxy2: can't"
+				LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't"
 				    " extract media port from the message\n");
 				return -1;
 			}
@@ -2426,13 +2426,13 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 			do {
 				node = select_rtpp_node(callid, 1, node_idx);
 				if (!node) {
-					LOG(L_ERR, "ERROR: force_rtp_proxy2: no available proxies\n");
+					LOG(L_ERR, "ERROR: force_rtp_transcode2_f: no available proxies\n");
 					return -1;
 				}
 				cp = send_rtpp_command(node, v, (to_tag.len > 0) ? 16 : 16); 	/* XXX Fix me at some time */
 												/* It's here to test */
 			} while (cp == NULL);
-			LOG(L_DBG, "force_rtp_proxy2: proxy reply: %s\n", cp);
+			LOG(L_DBG, "force_rtp_transcode2_f: proxy reply: %s\n", cp);
 			/* Parse proxy reply to <argc,argv> */
 			argc = 0;
 			memset(argv, 0, sizeof(argv));
@@ -2448,12 +2448,22 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 				}
 			}
 			if (argc < 1) {
-				LOG(L_ERR, "force_rtp_proxy2: no reply from rtp proxy\n");
+				LOG(L_ERR, "force_rtp_transcode2_f: no reply from rtp proxy\n");
 				return -1;
 			}
+			if (argv[0][0] == 'E') {
+			  port = atoi((char*)argv[0] + 1);
+			  if (port == 15) 
+			    LOG(L_ERR, "force_rtp_transcode2: rtp proxy encountered error"
+				" while initializing codec\n");
+			  else 
+			    LOG(L_ERR, "force_rtp_transcode2: rtp proxy encountered error: %u\n", port);
+			  return -1;
+			}
+
 			port = atoi(argv[0]);
 			if (port <= 0 || port > 65535) {
-				LOG(L_ERR, "force_rtp_proxy2: incorrect port in reply from rtp proxy\n");
+				LOG(L_ERR, "force_rtp_transcode2_f: incorrect port in reply from rtp proxy\n");
 				return -1;
 			}
 
@@ -2473,7 +2483,7 @@ force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 
 		anchor = anchor_lump(msg, body.s + body.len - msg->buf, 0, 0);
 		if (anchor == NULL) {
-			LOG(L_ERR, "ERROR: force_rtp_proxy2: anchor_lump failed\n");
+			LOG(L_ERR, "ERROR: force_rtp_transcode2_f: anchor_lump failed\n");
 			pkg_free(cp);
 			return -1;
 		}
