@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: rtp.h,v 1.2 2006/02/21 16:51:45 sayer Exp $
+ * $Id: rtp.h,v 1.3 2006/02/22 21:15:17 sayer Exp $
  *
  */
 
@@ -71,7 +71,5 @@ typedef struct {
 } rtp_hdr_t;
 
 #define	RTP_HDR_LEN(rhp)	(sizeof(*(rhp)) + ((rhp)->cc * sizeof((rhp)->csrc[0])))
-
-#define RTP_GET_SEQ(rhp)        ntohs(rhp->seq)
 
 #endif

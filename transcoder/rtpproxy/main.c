@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: main.c,v 1.4 2006/02/21 23:57:38 sayer Exp $
+ * $Id: main.c,v 1.5 2006/02/22 21:15:17 sayer Exp $
  *
  */
 
@@ -572,15 +572,6 @@ handle_command(int controlfd)
 	goto goterror;
     }
 
-    // added for testing
-/*     payload_id_callee  = 98; //3; */
-/*     codec_id_callee    = CODEC_ILBC; //CODEC_GSM0610; */
-/*     fmt_param_callee   = "mode=30"; */
-
-/*     payload_id_caller  = 0;          //3;            //98; */
-/*     codec_id_caller    = CODEC_ULAW;//CODEC_GSM0610; //CODEC_ILBC; */
-/*     fmt_param_caller   = ""; */
-
     call_id = argv[1];
     if (request != 0 || response != 0 || play != 0) {
       if ((transcode == 0) && (argc < 5 || argc > 6)) { 
@@ -797,20 +788,32 @@ handle_command(int controlfd)
 	if (transcode != 0) {
 	  if (request) { 
 	    // codec of caller unknown
-	    rtp_transcoder_update(spa->rtpt[0], 
-				  payload_id, codec_id, codec_fmt_param,
-				  0, 0, "");
-	    rtp_transcoder_update(spa->rtpt[1], 
+	    if (rtp_transcoder_update(spa->rtpt[0], 
+				      payload_id, codec_id, codec_fmt_param,
+				      0, 0, "") != 1) {
+	      ecode = 15;
+	      goto goterror;
+	    }
+	    if (rtp_transcoder_update(spa->rtpt[1], 
 				  0, 0, "", 
-				  payload_id, codec_id, codec_fmt_param);
+				  payload_id, codec_id, codec_fmt_param) != 1) {
+	      ecode = 15;
+	      goto goterror;
+	    };
 	  } else {
 	    // codec of callee unknown
-	    rtp_transcoder_update(spa->rtpt[0],
+	    if (rtp_transcoder_update(spa->rtpt[0],
 				  0, 0, "",
-				  payload_id, codec_id, codec_fmt_param);
-	    rtp_transcoder_update(spa->rtpt[1], 
+				  payload_id, codec_id, codec_fmt_param) != 1) {
+	      ecode = 15;
+	      goto goterror;
+	    };
+	    if (rtp_transcoder_update(spa->rtpt[1], 
 				  payload_id, codec_id, codec_fmt_param,
-				  0, 0, "");
+				  0, 0, "") != 1) {
+	      ecode = 15;
+	      goto goterror;
+	    };
 	  }
 	}
     
@@ -956,12 +959,20 @@ handle_command(int controlfd)
 					  0, 0, "");
 	spa->rtpt[1] = rtp_transcoder_new(0, 0, "", 
 					  payload_id, codec_id, codec_fmt_param);
+	if ((spa->rtpt[0] == NULL) || (spa->rtpt[1] == NULL)) {
+	  ecode = 15;
+	  goto goterror2;
+	}
       } else {
 	// codec of callee unknown
 	spa->rtpt[0] = rtp_transcoder_new(0, 0, "",
 					  payload_id, codec_id, codec_fmt_param);
 	spa->rtpt[1] = rtp_transcoder_new(payload_id, codec_id, codec_fmt_param,
 					  0, 0, "");
+	if ((spa->rtpt[0] == NULL) || (spa->rtpt[1] == NULL)) {
+	  ecode = 15;
+	  goto goterror2;
+	}
       }
     }
 
@@ -1021,6 +1032,7 @@ doreply:
 
 nomem:
     rtpp_log_write(RTPP_LOG_ERR, glog, "can't allocate memory");
+goterror2:
     for (i = 0; i < 2; i++)
 	if (ia[i] != NULL)
 	    free(ia[i]);

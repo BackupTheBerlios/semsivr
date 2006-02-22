@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: rtp_transcoder.c,v 1.4 2006/02/21 23:57:38 sayer Exp $
+ * $Id: rtp_transcoder.c,v 1.5 2006/02/22 21:15:17 sayer Exp $
  *
  */
 #include <stdlib.h>
@@ -38,6 +38,10 @@
 #include "rtpp_session.h"
 
 extern rtpp_log_t glog;
+
+
+#define PCM16           signed short
+#define BYTES_PER_SAMPLE 2  // sizeof(PCM16)
 
 struct rtp_transcoder *rtp_transcoder_new(char from_payload_id, int from_codec_id, 
 					  char* format_parameters_from,
@@ -70,6 +74,8 @@ int rtp_transcoder_update(struct rtp_transcoder* rt,
 
   amci_codec_fmt_info_t fmtinfo[8];
   unsigned int i;
+
+  rt->had_packet = 0;
 
   if (from_codec_id) {
     // free the old codec...
@@ -140,11 +146,13 @@ int rtp_transcoder_update(struct rtp_transcoder* rt,
 }
 
 void rtp_transcoder_free(struct rtp_transcoder *rt) {
-  if (rt->codec_to->destroy != NULL)
-    rt->codec_to->destroy(rt->handle_to);
-  if (rt->codec_from->destroy != NULL)
-    rt->codec_from->destroy(rt->handle_from);
-
+  if (rt->codec_to != NULL)
+    if (rt->codec_to->destroy != NULL)
+      rt->codec_to->destroy(rt->handle_to);
+  if (rt->codec_from != NULL)
+    if (rt->codec_from->destroy != NULL)
+      rt->codec_from->destroy(rt->handle_from);
+  
   free(rt);
 }
 
@@ -152,7 +160,9 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
 			     char* buf, int* len) {
 
 
-  int audio_len; 
+  unsigned int audio_len;
+  unsigned short rtp_seq, seq_diff; 
+  uint32_t rtp_ts;
   char* rtpp_audio_offset;
   rtp_hdr_t *rtp;
   div_t blocks;
@@ -172,26 +182,54 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
     return 0;
   }
 
-  rtpp_audio_offset = buf + RTP_HDR_LEN(rtp);
-  if (rtp->m || (RTP_GET_SEQ(rtp) != rt->last_seq+1)) {
-    if (rt->last_seq)
+  rtp_seq = ntohs(rtp->seq);
+  rtp_ts  = ntohl(rtp->ts);
+
+  if (rt->had_packet == 0) {
+    rt->audio_end = rt->pcmbuf; 
+    rt->begin_ts = rt->end_ts = rtp_ts;
+    rt->to_seq = ntohs(rtp->seq);
+    rt->had_packet = 1;
+  } else if (rtp->m || (rtp_seq != rt->last_seq+1) ||
+	     (rtp_ts != rt->end_ts) ) {
+    if (rtp_seq != rt->last_seq+1) {
       rtpp_log_write(RTPP_LOG_INFO, sp->log,
-		     "transcode: packetloss (%u, %u)",
-		     rtp->seq , rt->last_seq+1 );
-     rt->audio_end = rt->pcmbuf; // packet loss -> drop buffered audio
+		     "transcode: packetloss (%u, %u, %u samples)",
+		     rtp_seq, rt->last_seq+1, rtp_ts - rt->end_ts);
+      // packetloss -> update seq
+      if ((rt->to_framelength != 0) && (rt->from_framelength != 0)) 
+	rt->to_seq += (rtp_seq - rt->last_seq) * 
+	  rt->from_framelength/rt->to_framelength;
+       else 
+	rt->to_seq +=  rtp_seq - rt->last_seq;
+      
+    } else if (ntohl(rtp->ts) != rt->end_ts) {
+      rtpp_log_write(RTPP_LOG_INFO, sp->log,
+		     "transcode: silence %u samples",
+		     rtp_ts - rt->end_ts);
+    }
+    // packet loss/silence -> drop buffered audio
+    rt->audio_end = rt->pcmbuf; 
+    rt->begin_ts = rt->end_ts = rtp_ts;
   }
-  rt->last_seq  =  RTP_GET_SEQ(rtp);
+  rt->last_seq  =  rtp_seq;
 
   audio_len = *len - RTP_HDR_LEN(rtp);
   rtpp_log_write(RTPP_LOG_INFO, sp->log, // DEBUG
-		 "tr: got audio %d (in buffer %d)",
-		 audio_len, rt->audio_end - rt->pcmbuf);
+		 "tr: got audio %d from TS %u (in buffer %d from TS %u to TS %u)",
+		 audio_len, rtp_ts, rt->audio_end - rt->pcmbuf,
+		 rt->begin_ts, rt->end_ts);
 
-  audio_len = rt->codec_from->type2intern(rt->audio_end, rtpp_audio_offset, audio_len, 
+  rtpp_audio_offset = buf + RTP_HDR_LEN(rtp);
+  audio_len = rt->codec_from->type2intern(rt->audio_end, rtpp_audio_offset, 
+					  audio_len, 
 					  1, 8000, rt->handle_from);
   rtpp_log_write(RTPP_LOG_INFO, sp->log, // DEBUG
 		 "tr:  aud len after t2int: %d",
 		 audio_len);
+
+  rt->end_ts += audio_len / BYTES_PER_SAMPLE; 
+
   if (audio_len <= 0) {
     if (audio_len < 0) 
       rtpp_log_write(RTPP_LOG_ERR, sp->log,
@@ -201,11 +239,14 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
 
   rt->audio_end += audio_len;
 
+  rtp->ts = htonl(rt->begin_ts);  // update packet ts
+
   if (rt->to_framelength) {
     blocks = div(rt->audio_end - rt->pcmbuf, rt->to_framelength);
 
     if (blocks.quot)
-      audio_len = rt->codec_to->intern2type(rtpp_audio_offset, rt->pcmbuf, blocks.quot * rt->to_framelength, 
+      audio_len = rt->codec_to->intern2type(rtpp_audio_offset, rt->pcmbuf, 
+					    blocks.quot * rt->to_framelength, 
 					    1, 8000, rt->handle_to);
     else 
       audio_len = 0;
@@ -213,10 +254,15 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
       memcpy(rt->pcmbuf, rt->pcmbuf +  blocks.quot * rt->to_framelength, blocks.rem);
     }
     rt->audio_end = rt->pcmbuf + blocks.rem;
+    rt->begin_ts = rt->end_ts - blocks.rem / BYTES_PER_SAMPLE;
+    // or: rt->begin_ts += blocks.quot * rt->to_framelength / BYTES_PER_SAMPLE;
   } else {
-    audio_len = rt->codec_to->intern2type(rtpp_audio_offset, rt->pcmbuf, rt->audio_end - rt->pcmbuf, 
+    // all availabla audio is sent out
+    audio_len = rt->codec_to->intern2type(rtpp_audio_offset, rt->pcmbuf, 
+					  rt->audio_end - rt->pcmbuf, 
 					  1, 8000, rt->handle_to);
     rt->audio_end = rt->pcmbuf; // clear buffer
+    rt->begin_ts = rt->end_ts;
   }
   if (audio_len <= 0) {
     if (audio_len < 0) 
@@ -225,10 +271,16 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
     return 0;
   }
 
+  rtp->seq = htons(rt->to_seq);   // update packet seqno
+  rt->to_seq++;
+
   rtpp_log_write(RTPP_LOG_INFO, sp->log,
-		 "transcoded from payload %d to %d, size %d (%d) to %d (%d) (buffering %d).",
+		 "transcoded from payload %d to %d,"
+		 "size %d (%d) to %d (%d) ts %u (buffering %d).\n",
 		 rt->from_payload_id, rt->to_payload_id, *len,*len - RTP_HDR_LEN(rtp),
-		 audio_len + RTP_HDR_LEN(rtp), audio_len, rt->audio_end - rt->pcmbuf);
+		 audio_len + RTP_HDR_LEN(rtp), audio_len, 
+		 ntohl(rtp->ts),
+		 rt->audio_end - rt->pcmbuf);
   
   *len = audio_len + RTP_HDR_LEN(rtp);
   
