@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: rtp_transcoder.h,v 1.4 2006/02/22 21:15:17 sayer Exp $
+ * $Id: rtp_transcoder.h,v 1.5 2006/02/23 00:15:24 sayer Exp $
  *
  */
 
@@ -33,6 +33,7 @@
 #include "amci/amci.h"
 
 #include <sys/types.h>
+/* #include <stdio.h> */
 
 struct rtpp_session;
 
@@ -58,6 +59,8 @@ struct rtp_transcoder {
   char* audio_end;
 
   int had_packet;
+
+/*   FILE* tstfile; */
 };
 
 struct rtp_transcoder *rtp_transcoder_new(char from_payload_id, int from_codec_id, 

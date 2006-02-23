@@ -1,5 +1,5 @@
 /*
- * $Id: gsm.c,v 1.1 2006/02/16 19:52:04 sayer Exp $
+ * $Id: gsm.c,v 1.2 2006/02/23 00:15:43 sayer Exp $
  *
  * Copyright (C) 2002-2003 Fhg Fokus
  *
@@ -59,6 +59,7 @@ END_EXPORTS
 static int pcm16_2_gsm(unsigned char* out_buf, unsigned char* in_buf, unsigned int size, 
 		       unsigned int channels, unsigned int rate, long h_codec )
 {
+    int i;
     div_t blocks;
     blocks = div(size,320);
 
@@ -67,13 +68,17 @@ static int pcm16_2_gsm(unsigned char* out_buf, unsigned char* in_buf, unsigned i
 	return -1;
     }
 
-    gsm_encode((gsm)h_codec,(gsm_signal*)in_buf,out_buf);
+    for (i=0;i<blocks.quot;i++)
+      gsm_encode((gsm)h_codec,(gsm_signal*)in_buf + i*320,out_buf + i*33);
+    
+
     return blocks.quot * 33;
 }
 
 static int gsm_2_pcm16(unsigned char* out_buf, unsigned char* in_buf, unsigned int size, 
 		       unsigned int channels, unsigned int rate, long h_codec )
 {
+    int i;
     div_t blocks;
     unsigned int out_size;
 
@@ -93,8 +98,8 @@ static int gsm_2_pcm16(unsigned char* out_buf, unsigned char* in_buf, unsigned i
 	      size,out_size,AUDIO_BUFFER_SIZE);
 	return -1;
     }
-
-    gsm_decode((gsm)h_codec,in_buf,(gsm_signal*)out_buf);
+    for (i=0;i<blocks.quot;i++) 
+      gsm_decode((gsm)h_codec,in_buf + i*320,(gsm_signal*)out_buf + i*33);
 
     return out_size;
 }

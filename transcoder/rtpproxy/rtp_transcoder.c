@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: rtp_transcoder.c,v 1.5 2006/02/22 21:15:17 sayer Exp $
+ * $Id: rtp_transcoder.c,v 1.6 2006/02/23 00:15:24 sayer Exp $
  *
  */
 #include <stdlib.h>
@@ -42,6 +42,8 @@ extern rtpp_log_t glog;
 
 #define PCM16           signed short
 #define BYTES_PER_SAMPLE 2  // sizeof(PCM16)
+
+//#define DEBUG
 
 struct rtp_transcoder *rtp_transcoder_new(char from_payload_id, int from_codec_id, 
 					  char* format_parameters_from,
@@ -75,6 +77,13 @@ int rtp_transcoder_update(struct rtp_transcoder* rt,
   amci_codec_fmt_info_t fmtinfo[8];
   unsigned int i;
 
+/*   if (to_payload_id == 3) { */
+/*     rt->tstfile = fopen("/tmp/test.gsm", "w+"); */
+/*     if (rt->tstfile == NULL) { */
+/*       rtpp_log_write(RTPP_LOG_INFO, glog, "init:::: cannot file\r\n\r\nqqqqqqqqqqqqqqqq\n"); */
+/*     } */
+/*   } */
+
   rt->had_packet = 0;
 
   if (from_codec_id) {
@@ -94,18 +103,21 @@ int rtp_transcoder_update(struct rtp_transcoder* rt,
       for (i=0; fmtinfo[i].id!=0;i++) {
 	if (fmtinfo[i].id == AMCI_FMT_FRAME_SIZE) {
 	  rt->from_framelength = fmtinfo[i].value * 2; // sizeof(PCM16)
+#ifdef DEBUG
 	      rtpp_log_write(RTPP_LOG_INFO, sp->log, // DEBUG
 		   "transcode_init: from_framelength %d",
 		   rt->from_framelength);
-
+#endif
 	}
 	if (fmtinfo[i].id == AMCI_FMT_ENCODED_FRAME_SIZE) {
 	  rt->from_encodedsize = fmtinfo[i].value;
 	}
       }  
     }
+#ifdef DEBUG
     rtpp_log_write(RTPP_LOG_INFO, glog, "rtp_trancoder_update: from %d/%d", 
 		   to_codec_id, to_payload_id);
+#endif
   }
   
   if (to_codec_id) {
@@ -127,17 +139,21 @@ int rtp_transcoder_update(struct rtp_transcoder* rt,
       for (i=0; fmtinfo[i].id!=0;i++) {
 	if (fmtinfo[i].id == AMCI_FMT_FRAME_SIZE) {
 	  rt->to_framelength = fmtinfo[i].value * 2; // sizeof(PCM16);
+#ifdef DEBUG
 	  rtpp_log_write(RTPP_LOG_INFO, sp->log, // DEBUG
 			 "transcode_init: to_framelength %d",
 			 rt->to_framelength);
+#endif
 	}
 	if (fmtinfo[i].id == AMCI_FMT_ENCODED_FRAME_SIZE) {
 	  rt->to_encodedsize = fmtinfo[i].value;
 	}
       }  
     }
+#ifdef DEBUG
     rtpp_log_write(RTPP_LOG_INFO, glog, "rtp_trancoder_update: to %d/%d", 
 	    to_codec_id, to_payload_id);
+#endif
   }
 
   rt->audio_end = rt->pcmbuf;
@@ -146,6 +162,9 @@ int rtp_transcoder_update(struct rtp_transcoder* rt,
 }
 
 void rtp_transcoder_free(struct rtp_transcoder *rt) {
+/*   if (rt->to_payload_id == 3) */
+/*     fclose(rt->tstfile); */
+
   if (rt->codec_to != NULL)
     if (rt->codec_to->destroy != NULL)
       rt->codec_to->destroy(rt->handle_to);
@@ -193,9 +212,11 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
   } else if (rtp->m || (rtp_seq != rt->last_seq+1) ||
 	     (rtp_ts != rt->end_ts) ) {
     if (rtp_seq != rt->last_seq+1) {
+#ifdef DEBUG
       rtpp_log_write(RTPP_LOG_INFO, sp->log,
 		     "transcode: packetloss (%u, %u, %u samples)",
 		     rtp_seq, rt->last_seq+1, rtp_ts - rt->end_ts);
+#endif
       // packetloss -> update seq
       if ((rt->to_framelength != 0) && (rt->from_framelength != 0)) 
 	rt->to_seq += (rtp_seq - rt->last_seq) * 
@@ -203,10 +224,12 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
        else 
 	rt->to_seq +=  rtp_seq - rt->last_seq;
       
-    } else if (ntohl(rtp->ts) != rt->end_ts) {
+    } else if (rtp_ts != rt->end_ts) {
+#ifdef DEBUG
       rtpp_log_write(RTPP_LOG_INFO, sp->log,
 		     "transcode: silence %u samples",
 		     rtp_ts - rt->end_ts);
+#endif
     }
     // packet loss/silence -> drop buffered audio
     rt->audio_end = rt->pcmbuf; 
@@ -215,18 +238,21 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
   rt->last_seq  =  rtp_seq;
 
   audio_len = *len - RTP_HDR_LEN(rtp);
+#ifdef DEBUG
   rtpp_log_write(RTPP_LOG_INFO, sp->log, // DEBUG
 		 "tr: got audio %d from TS %u (in buffer %d from TS %u to TS %u)",
 		 audio_len, rtp_ts, rt->audio_end - rt->pcmbuf,
 		 rt->begin_ts, rt->end_ts);
-
+#endif
   rtpp_audio_offset = buf + RTP_HDR_LEN(rtp);
   audio_len = rt->codec_from->type2intern(rt->audio_end, rtpp_audio_offset, 
 					  audio_len, 
 					  1, 8000, rt->handle_from);
+#ifdef DEBUG
   rtpp_log_write(RTPP_LOG_INFO, sp->log, // DEBUG
 		 "tr:  aud len after t2int: %d",
 		 audio_len);
+#endif
 
   rt->end_ts += audio_len / BYTES_PER_SAMPLE; 
 
@@ -244,20 +270,22 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
   if (rt->to_framelength) {
     blocks = div(rt->audio_end - rt->pcmbuf, rt->to_framelength);
 
-    if (blocks.quot)
+    if (blocks.quot) {
       audio_len = rt->codec_to->intern2type(rtpp_audio_offset, rt->pcmbuf, 
 					    blocks.quot * rt->to_framelength, 
 					    1, 8000, rt->handle_to);
-    else 
+      if (blocks.rem) {
+	memmove(rt->pcmbuf, rt->pcmbuf +  blocks.quot * rt->to_framelength, blocks.rem);
+      }
+  
+    } else 
       audio_len = 0;
-    if (blocks.rem) {
-      memcpy(rt->pcmbuf, rt->pcmbuf +  blocks.quot * rt->to_framelength, blocks.rem);
-    }
+    
     rt->audio_end = rt->pcmbuf + blocks.rem;
     rt->begin_ts = rt->end_ts - blocks.rem / BYTES_PER_SAMPLE;
     // or: rt->begin_ts += blocks.quot * rt->to_framelength / BYTES_PER_SAMPLE;
   } else {
-    // all availabla audio is sent out
+    // all available audio is sent out
     audio_len = rt->codec_to->intern2type(rtpp_audio_offset, rt->pcmbuf, 
 					  rt->audio_end - rt->pcmbuf, 
 					  1, 8000, rt->handle_to);
@@ -274,6 +302,7 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
   rtp->seq = htons(rt->to_seq);   // update packet seqno
   rt->to_seq++;
 
+#ifdef DEBUG
   rtpp_log_write(RTPP_LOG_INFO, sp->log,
 		 "transcoded from payload %d to %d,"
 		 "size %d (%d) to %d (%d) ts %u (buffering %d).\n",
@@ -281,7 +310,15 @@ int rtp_transcoder_transcode(struct rtp_transcoder *rt, struct rtpp_session* sp,
 		 audio_len + RTP_HDR_LEN(rtp), audio_len, 
 		 ntohl(rtp->ts),
 		 rt->audio_end - rt->pcmbuf);
+#endif
   
+/*   if (rt->tstfile != NULL) { */
+/*     fwrite(rtpp_audio_offset, 1, audio_len, rt->tstfile); */
+/*     rtpp_log_write(RTPP_LOG_INFO, sp->log, */
+/* 		   "written"); */
+	
+/*   } */
+
   *len = audio_len + RTP_HDR_LEN(rtp);
   
   rtp->pt = rt->to_payload_id;
