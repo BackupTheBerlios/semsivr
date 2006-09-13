@@ -1,5 +1,5 @@
 /*
- * $Id: nhelpr_funcs.c,v 1.1 2006/02/14 21:13:11 sayer Exp $
+ * $Id: nhelpr_funcs.c,v 1.2 2006/09/13 22:35:30 clona Exp $
  *
  *
  * Copyright (C) 2001-2003 FhG Fokus

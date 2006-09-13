@@ -1,5 +1,5 @@
 /*
- * $Id: nathelper.h,v 1.1 2006/02/14 21:13:11 sayer Exp $
+ * $Id: nathelper.h,v 1.2 2006/09/13 22:35:30 clona Exp $
  *
  *
  * Copyright (C) 2005 Porta Software Ltd.
@@ -21,8 +21,8 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License 
- * along with this program; if not, write to the Free Software 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
@@ -38,6 +38,8 @@ extern struct socket_info* force_socket;
 
 /* Functions from natping.c */
 int natpinger_init(void);
+
+int natping_contact(str, struct dest_info *);
 
 /* Variables from natping.c referenced from nathelper.c */
 extern int natping_interval;

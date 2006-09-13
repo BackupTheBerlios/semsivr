@@ -1,4 +1,4 @@
-/* $Id: nathelper.c,v 1.6 2006/02/22 21:16:13 sayer Exp $
+/* $Id: nathelper.c,v 1.7 2006/09/13 22:35:30 clona Exp $
  *
  * Copyright (C) 2003 Porta Software Ltd
  *
@@ -156,6 +156,9 @@
  *		Since nathelper is not transaction or call stateful, care should be
  *		taken to ensure that force_rtp_proxy() in request path matches
  *		force_rtp_proxy() in reply path, that is the same node is selected.
+ *
+ * 2006-06-10	select nathepler.rewrite_contact
+ *		pingcontact function (tma)
  */
 
 #include "nhelpr_funcs.h"
@@ -181,6 +184,7 @@
 #include "../usrloc/usrloc.h"
 #include "../../usr_avp.h"
 #include "../../socket_info.h"
+#include "../../select.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -234,14 +238,14 @@ static int rtpp_test(struct rtpp_node*, int, int);
 static char *send_rtpp_command(struct rtpp_node*, struct iovec *, int);
 static int unforce_rtp_proxy0_f(struct sip_msg *, char *, char *);
 static int unforce_rtp_proxy1_f(struct sip_msg *, char *, char *);
-static int force_rtp_proxy0_f(struct sip_msg *, char *, char *);
 static int force_rtp_proxy1_f(struct sip_msg *, char *, char *);
 static int force_rtp_proxy2_f(struct sip_msg *, char *, char *);
 static int force_rtp_transcode2_f(struct sip_msg *, char *, char *);
 static int fix_nated_register_f(struct sip_msg *, char *, char *);
-static int add_rcv_param_f(struct sip_msg *, char *, char *);
 static char *find_sdp_line(char *, char *, char);
 static char *find_next_sdp_line(char *, char *, char, char *);
+static int fixup_ping_contact(void **param, int param_no);
+static int ping_contact_f(struct sip_msg* msg, char* str1, char* str2);
 
 static int mod_init(void);
 static int child_init(int);
@@ -275,7 +279,7 @@ static int rtpproxy_retr = 5;
 static int rtpproxy_tout = 1;
 static pid_t mypid;
 static unsigned int myseqn = 0;
-static int rcv_avp_no = 42;
+
 
 struct rtpp_head {
 	struct rtpp_node	*rn_first;
@@ -301,14 +305,14 @@ static cmd_export_t cmds[] = {
 	{"fix_nated_contact",  fix_nated_contact_f,    0, 0,             REQUEST_ROUTE | ONREPLY_ROUTE },
 	{"fix_nated_sdp",      fix_nated_sdp_f,        1, fixup_int_1, REQUEST_ROUTE | ONREPLY_ROUTE | FAILURE_ROUTE },
 	{"unforce_rtp_proxy",  unforce_rtp_proxy0_f,   0, 0,             REQUEST_ROUTE | ONREPLY_ROUTE | FAILURE_ROUTE },
-	{"unforce_rtp_proxy",  unforce_rtp_proxy1_f,   1, fixup_int_1,   REQUEST_ROUTE | ONREPLY_ROUTE | FAILURE_ROUTE },
-	{"force_rtp_proxy",    force_rtp_proxy0_f,     0, 0,             REQUEST_ROUTE | ONREPLY_ROUTE },
-	{"force_rtp_proxy",    force_rtp_proxy1_f,     1, 0,             REQUEST_ROUTE | ONREPLY_ROUTE },
-	{"force_rtp_proxy",    force_rtp_proxy2_f,     2, 0,             REQUEST_ROUTE | ONREPLY_ROUTE },
-	{"force_rtp_transcode",    force_rtp_transcode2_f,     2, 0,             REQUEST_ROUTE | ONREPLY_ROUTE },
+	{"unforce_rtp_proxy",  unforce_rtp_proxy1_f,   1, fixup_var_str_1,   REQUEST_ROUTE | ONREPLY_ROUTE | FAILURE_ROUTE },
+	{"force_rtp_proxy",    force_rtp_proxy1_f,     0, 0,             REQUEST_ROUTE | ONREPLY_ROUTE },
+	{"force_rtp_proxy",    force_rtp_proxy1_f,     1, fixup_var_str_1,             REQUEST_ROUTE | ONREPLY_ROUTE },
+	{"force_rtp_proxy",    force_rtp_proxy2_f,     2, fixup_var_str_12,            REQUEST_ROUTE | ONREPLY_ROUTE },
+        {"force_rtp_transcode",    force_rtp_transcode2_f,     2, 0,             REQUEST_ROUTE | ONREPLY_ROUTE },
 	{"nat_uac_test",       nat_uac_test_f,         1, fixup_int_1, REQUEST_ROUTE | ONREPLY_ROUTE | FAILURE_ROUTE },
 	{"fix_nated_register", fix_nated_register_f,   0, 0,             REQUEST_ROUTE },
-	{"add_rcv_param",      add_rcv_param_f,        0, 0,             REQUEST_ROUTE },
+	{"ping_contact",       ping_contact_f,         1, fixup_ping_contact,  REQUEST_ROUTE },
 	{0, 0, 0, 0, 0}
 };
 
@@ -321,7 +325,6 @@ static param_export_t params[] = {
 	{"rtpproxy_disable_tout", PARAM_INT,    &rtpproxy_disable_tout },
 	{"rtpproxy_retr",         PARAM_INT,    &rtpproxy_retr         },
 	{"rtpproxy_tout",         PARAM_INT,    &rtpproxy_tout         },
-	{"received_avp",          PARAM_INT,    &rcv_avp_no            },
 	{"force_socket",          PARAM_STRING, &force_socket_str      },
 	{0, 0, 0}
 };
@@ -336,6 +339,23 @@ struct module_exports exports = {
 	0, /* destroy function */
 	0, /* on_break */
 	child_init
+};
+
+static int sel_nathelper(str* res, select_t* s, struct sip_msg* msg) {  /* dummy */
+	return 0;
+}
+
+static int sel_rewrite_contact(str* res, select_t* s, struct sip_msg* msg);
+
+SELECT_F(select_any_nameaddr)
+
+select_row_t sel_declaration[] = {
+	{ NULL, SEL_PARAM_STR, STR_STATIC_INIT("nathelper"), sel_nathelper, SEL_PARAM_EXPECTED},
+	{ sel_nathelper, SEL_PARAM_STR, STR_STATIC_INIT("rewrite_contact"), sel_rewrite_contact, CONSUME_NEXT_INT },
+
+	{ sel_rewrite_contact, SEL_PARAM_STR, STR_STATIC_INIT("nameaddr"), select_any_nameaddr, NESTED | CONSUME_NEXT_STR},
+
+	{ NULL, SEL_PARAM_INT, STR_NULL, NULL, 0}
 };
 
 static int
@@ -429,9 +449,10 @@ mod_init(void)
 				pnode->rn_umode = 0;
 				pnode->rn_address += 5;
 			}
+			 LOG(L_ERR, "DEB: IP address of RTPPROXY is %s", pnode->rn_address);
 		}
 	}
-
+	register_select_table(sel_declaration);
 	return 0;
 }
 
@@ -442,6 +463,7 @@ child_init(int rank)
 	char *cp;
 	struct addrinfo hints, *res;
 	struct rtpp_node *pnode;
+	
 
 	/* Iterate known RTP proxies - create sockets */
 	mypid = getpid();
@@ -665,8 +687,12 @@ fix_nated_contact_f(struct sip_msg* msg, char* str1, char* str2)
 
 	if (get_contact_uri(msg, &uri, &c) == -1)
 		return -1;
+	/* for UAs behind NAT we have to hope that they will reuse the
+	 * TCP connection, otherwise they are lost any way. So this check
+	 * does not make too much sense.
 	if (uri.proto != PROTO_UDP && uri.proto != PROTO_NONE)
 		return -1;
+	*/
 	if ((c->uri.s < msg->buf) || (c->uri.s > (msg->buf + msg->len))) {
 		LOG(L_ERR, "ERROR: you can't call fix_nated_contact twice, "
 		    "check your config!\n");
@@ -706,6 +732,60 @@ fix_nated_contact_f(struct sip_msg* msg, char* str1, char* str2)
 	c->uri.len = len;
 
 	return 1;
+}
+
+static int sel_rewrite_contact(str* res, select_t* s, struct sip_msg* msg) {
+	static char buf[500];
+	contact_t* c;
+	int n, def_port_fl, len;
+	char *cp;
+	str hostport;
+	struct sip_uri uri;
+
+	res->len = 0;
+	n = s->params[2].v.i;
+	if (n <= 0) {
+		LOG(L_ERR, "ERROR: rewrite_contact[%d]: zero or negative index not supported\n", n);
+		return -1;
+	}
+	c = 0;
+	do {
+		if (contact_iterator(&c, msg, c) < 0 || !c)
+			return -1;
+		n--;
+	} while (n > 0);
+
+	if (parse_uri(c->uri.s, c->uri.len, &uri) < 0 || uri.host.len <= 0) {
+		LOG(L_ERR, "rewrite_contact[%d]: Error while parsing Contact URI\n", s->params[2].v.i);
+		return -1;
+	}
+	len = c->len - uri.host.len;
+	if (uri.port.len > 0)
+		len -= uri.port.len;
+	def_port_fl = (msg->rcv.proto == PROTO_TLS && msg->rcv.src_port == SIPS_PORT) || (msg->rcv.proto != PROTO_TLS && msg->rcv.src_port == SIP_PORT);
+	if (!def_port_fl)
+		len += 1/*:*/+5/*port*/;
+	if (len > sizeof(buf)) {
+		LOG(L_ERR, "ERROR: rewrite_contact[%d]: contact too long\n", s->params[2].v.i);
+		return -1;
+	}
+	hostport = uri.host;
+	if (uri.port.len > 0)
+		hostport.len = uri.port.s + uri.port.len - uri.host.s;
+
+	res->s = buf;
+	res->len = hostport.s - c->name.s;
+	memcpy(buf, c->name.s, res->len);
+	cp = ip_addr2a(&msg->rcv.src_ip);
+	if (def_port_fl) {
+		res->len+= snprintf(buf+res->len, sizeof(buf)-res->len, "%s", cp);
+	} else {
+		res->len+= snprintf(buf+res->len, sizeof(buf)-res->len, "%s:%d", cp, msg->rcv.src_port);
+	}
+	memcpy(buf+res->len, hostport.s+hostport.len, c->len-(hostport.s+hostport.len-c->name.s));
+	res->len+= c->len-(hostport.s+hostport.len-c->name.s);
+
+	return 0;
 }
 
 /*
@@ -791,7 +871,7 @@ nat_uac_test_f(struct sip_msg* msg, char* str1, char* str2)
 {
 	int tests;
 
-	tests = (int)(long)str1;
+	if (get_int_fparam(&tests, msg, (fparam_t*) str1) < -1) return -1;
 
 	/* return true if any of the NAT-UAC tests holds */
 
@@ -831,9 +911,13 @@ nat_uac_test_f(struct sip_msg* msg, char* str1, char* str2)
 #define	ADD_ADIRECTION	0x01
 #define	FIX_MEDIP	0x02
 #define	ADD_ANORTPPROXY	0x04
+#define ADD_ADIRECTIONP 0x08
 
 #define	ADIRECTION	"a=direction:active\r\n"
 #define	ADIRECTION_LEN	(sizeof(ADIRECTION) - 1)
+
+#define ADIRECTIONP     "a=direction:passive\r\n"
+#define ADIRECTIONP_LEN (sizeof(ADIRECTIONP) - 1)
 
 #define	AOLDMEDIP	"a=oldmediaip:"
 #define	AOLDMEDIP_LEN	(sizeof(AOLDMEDIP) - 1)
@@ -855,14 +939,14 @@ fix_nated_sdp_f(struct sip_msg* msg, char* str1, char* str2)
 	char *buf;
 	struct lump* anchor;
 
-	level = (int)(long)str1;
-
+	if (get_int_fparam(&level, msg, (fparam_t*) str1) < -1) return -1;
+	
 	if (extract_body(msg, &body) == -1) {
 		LOG(L_ERR,"ERROR: fix_nated_sdp: cannot extract body from msg!\n");
 		return -1;
 	}
 
-	if (level & (ADD_ADIRECTION | ADD_ANORTPPROXY)) {
+	if (level & (ADD_ADIRECTION | ADD_ANORTPPROXY | ADD_ADIRECTIONP)) {
 		msg->msg_flags |= FL_FORCE_ACTIVE;
 		anchor = anchor_lump(msg, body.s + body.len - msg->buf, 0, 0);
 		if (anchor == NULL) {
@@ -877,6 +961,19 @@ fix_nated_sdp_f(struct sip_msg* msg, char* str1, char* str2)
 			}
 			memcpy(buf, ADIRECTION, ADIRECTION_LEN);
 			if (insert_new_lump_after(anchor, buf, ADIRECTION_LEN, 0) == NULL) {
+				LOG(L_ERR, "ERROR: fix_nated_sdp: insert_new_lump_after failed\n");
+				pkg_free(buf);
+				return -1;
+			}
+		}
+		if (level & ADD_ADIRECTIONP) {
+			buf = pkg_malloc(ADIRECTIONP_LEN * sizeof(char));
+			if (buf == NULL) {
+				LOG(L_ERR, "ERROR: fix_nated_sdp: out of memory\n");
+				return -1;
+			}
+			memcpy(buf, ADIRECTIONP, ADIRECTIONP_LEN);
+			if (insert_new_lump_after(anchor, buf, ADIRECTIONP_LEN, 0) == NULL) {
 				LOG(L_ERR, "ERROR: fix_nated_sdp: insert_new_lump_after failed\n");
 				pkg_free(buf);
 				return -1;
@@ -1300,6 +1397,11 @@ rtpp_test(struct rtpp_node *node, int isdisabled, int force)
 			break;
 		}
 		cp = send_rtpp_command(node, vf, 4);
+		if (cp == NULL) {
+			LOG(L_WARN,"WARNING: rtpp_test: RTP proxy went down during "
+			    "version query\n");
+			break;
+		}
 		if (cp[0] == 'E' || atoi(cp) != 1) {
 			LOG(L_WARN, "WARNING: rtpp_test: of RTP proxy <%s>"
 			    "doesn't support required protocol version %s\n",
@@ -1564,8 +1666,15 @@ static int
 unforce_rtp_proxy1_f(struct sip_msg* msg, char* str1, char* str2)
 {
 	int node_idx;
+	str rtpnode;
 
-	node_idx = (int)(long)str1;
+	if (get_str_fparam(&rtpnode, msg, (fparam_t*) str1) < -1) {
+		 ERR("force_rtp_proxy(): Error while getting rtp_proxy node (fparam '%s')\n", ((fparam_t*)str1)->orig);
+		
+		return -1;
+	}
+
+	str2int(&rtpnode, &node_idx);
 	return unforce_rtp_proxy_f(msg, node_idx);
 }
 
@@ -1620,13 +1729,13 @@ find_next_sdp_line(char* p, char* plimit, char linechar, char* defptr)
 }
 
 static int
-
-force_rtp_proxy2_f(struct sip_msg* msg, char* str1, char* str2)
+force_rtp_proxy2_f(struct sip_msg* msg, char* param1, char* param2)
 {
-	str body, body1, oldport, oldip, newport, newip;
+	str body, body1, oldport, oldip, newport, newip, str1, str2, s;
 	str callid, from_tag, to_tag, tmp;
-	int create, port, len, asymmetric, flookup, argc, proxied, real;
-	int oidx, pf, pf1, force, node_idx;
+	int create, port, len, asymmetric, flookup, argc, proxied, real, i;
+	int oidx, pf, pf1, force;
+	unsigned int node_idx;
 	char opts[16];
 	char *cp, *cp1;
 	char  *cpend, *next;
@@ -1655,12 +1764,28 @@ force_rtp_proxy2_f(struct sip_msg* msg, char* str1, char* str2)
 	str medianum_str, tmpstr1;
 	int c1p_altered;
 
+	if (param1) {
+		if (get_str_fparam(&str1, msg, (fparam_t*)param1) < 0) {
+			LOG(L_ERR, "force_rtp_proxy(): Error while parsing 1st param ('%s')\n", 
+			    ((fparam_t*)param1)->orig);
+			return -1;
+		}
+	}
+	else 
+		str1.len = 0;
+	
+	if (get_str_fparam(&str2, msg, (fparam_t*)param2) < 0) {
+		LOG(L_ERR, "force_rtp_proxy(): Error while parsing 2nd param ('%s')\n", 
+		    ((fparam_t*)param2)->orig);
+		return -1;
+	}
+
 	v[1].iov_base=opts;
 	asymmetric = flookup = force = real = 0;
 	oidx = 1;
 	node_idx = -1;
-	for (cp = str1; *cp != '\0'; cp++) {
-		switch (*cp) {
+	for (i=0; i<str1.len; i++) {
+		switch (str1.s[i]) {
 		case ' ':
 		case '\t':
 			break;
@@ -1699,20 +1824,20 @@ force_rtp_proxy2_f(struct sip_msg* msg, char* str1, char* str2)
 
 		case 'n':
 		case 'N':
-			cp++;
-			for (len = 0; isdigit(cp[len]); len++)
+			i++;
+			s.s = str1.s+i; 
+			for (s.len = 0; i<str1.len && isdigit(str1.s[i]); i++, s.len++)
 				continue;
-			if (len == 0) {
+			if (s.len == 0) {
 				LOG(L_ERR, "ERROR: force_rtp_proxy2: non-negative integer"
-				    "should follow N option\n");
+					"should follow N option\n");
 				return -1;
 			}
-			node_idx = strtoul(cp, NULL, 10);
-			cp += len - 1;
+			str2int(&s, &node_idx);
 			break;
-
+			
 		default:
-			LOG(L_ERR, "ERROR: force_rtp_proxy2: unknown option `%c'\n", *cp);
+			LOG(L_ERR, "ERROR: force_rtp_proxy2: unknown option `%c'\n", str1.s[i]);
 			return -1;
 		}
 	}
@@ -1784,13 +1909,9 @@ force_rtp_proxy2_f(struct sip_msg* msg, char* str1, char* str2)
 		LOG(L_ERR, "ERROR: force_rtp_proxy2: no sessions in SDP\n");
 		return -1;
 	}
-
-
 	v2p = find_next_sdp_line(v1p, bodylimit, 'v', bodylimit);
 	media_multi = (v2p != bodylimit);
 	v2p = v1p;
-
-	LOG(L_ERR, "Atle er her \r\n %s\n", v2p);
 	medianum = 0;
 	for(;;) {
 		/* Per-session iteration. */
@@ -1801,8 +1922,6 @@ force_rtp_proxy2_f(struct sip_msg* msg, char* str1, char* str2)
 		/* v2p is text limit for session parsing. */
 		m1p = find_sdp_line(v1p, v2p, 'm');
 		/* Have this session media description? */
-
-		LOG(L_ERR,"Find_sdp_line: %s\r\n", m1p);
 		if (m1p == NULL) {
 			LOG(L_ERR, "ERROR: force_rtp_proxy2: no m= in session\n");
 			return -1;
@@ -1813,8 +1932,6 @@ force_rtp_proxy2_f(struct sip_msg* msg, char* str1, char* str2)
 		 */
 		c1p = find_sdp_line(v1p, m1p, 'c');
 		c1p_altered = 0;
-		
-		LOG(L_ERR,"Find sencond _sdp_line: %s\r\n", c1p);
 		/* Have session. Iterate media descriptions in session */
 		m2p = m1p;
 		for (;;) {
@@ -1917,8 +2034,13 @@ force_rtp_proxy2_f(struct sip_msg* msg, char* str1, char* str2)
 					newip.len = 7;
 				}
 			} else {
-				newip.s = (argc < 2) ? str2 : argv[1];
-				newip.len = strlen(newip.s);
+				if (argc < 2) {
+					newip = str2;
+				}
+				else {
+					newip.s = argv[1];
+					newip.len = strlen(newip.s);
+				}
 			}
 			newport.s = int2str(port, &newport.len); /* beware static buffer */
 			/* Alter port. */
@@ -1941,7 +2063,6 @@ force_rtp_proxy2_f(struct sip_msg* msg, char* str1, char* str2)
 		} /* Iterate medias in session */
 	} /* Iterate sessions */
 
-
 	if (proxied == 0) {
 		cp = pkg_malloc(ANORTPPROXY_LEN * sizeof(char));
 		if (cp == NULL) {
@@ -1962,7 +2083,6 @@ force_rtp_proxy2_f(struct sip_msg* msg, char* str1, char* str2)
 		}
 	}
 
-	//LOG(L_ERR, "Atle2 er her \r\n %s\n", msg->buf);
 	return 1;
 }
 
@@ -1970,21 +2090,18 @@ static int
 force_rtp_proxy1_f(struct sip_msg* msg, char* str1, char* str2)
 {
 	char *cp;
+	fparam_t param2;
+	
 	char newip[IP_ADDR_MAX_STR_SIZE];
 
 	cp = ip_addr2a(&msg->rcv.dst_ip);
 	strcpy(newip, cp);
-	return force_rtp_proxy2_f(msg, str1, newip);
+	param2.type = FPARAM_STRING;
+	param2.orig = param2.v.asciiz = newip;
+	return force_rtp_proxy2_f(msg, str1, (char*)&param2);
 }
 
-static int
 
-force_rtp_proxy0_f(struct sip_msg* msg, char* str1, char* str2)
-{
-	char arg[1] = {'\0'};
-
-	return force_rtp_proxy1_f(msg, arg, NULL);
-}
 
 #define DSTIP_PARAM ";dstip="
 #define DSTIP_PARAM_LEN (sizeof(DSTIP_PARAM) - 1)
@@ -2055,17 +2172,26 @@ create_rcv_uri(str* uri, struct sip_msg* m)
 	len += DSTIP_PARAM_LEN + dst_ip.len;
 	len += DSTPORT_PARAM_LEN + dst_port.len;
 
+	if (m->rcv.src_ip.af == AF_INET6) {
+		len += 2;
+	}
+
 	if (len > MAX_URI_SIZE) {
 		LOG(L_ERR, "create_rcv_uri: Buffer too small\n");
 		return -1;
 	}
 
 	p = buf;
+	/* as transport=tls is deprecated shouldnt this be sips in case of TLS? */
 	memcpy(p, "sip:", 4);
 	p += 4;
 
+	if (m->rcv.src_ip.af == AF_INET6)
+		*p++ = '[';
 	memcpy(p, src_ip.s, src_ip.len);
 	p += src_ip.len;
+	if (m->rcv.src_ip.af == AF_INET6)
+		*p++ = ']';
 
 	*p++ = ':';
 
@@ -2098,11 +2224,11 @@ create_rcv_uri(str* uri, struct sip_msg* m)
 
 
 /*
- * Add received parameter to Contacts for further
- * forwarding of the REGISTER requuest
+ * Create an AVP to be used by registrar with the source IP and port
+ * of the REGISTER
  */
 static int
-add_rcv_param_f(struct sip_msg* msg, char* str1, char* str2)
+fix_nated_register_f(struct sip_msg* msg, char* str1, char* str2)
 {
 	contact_t* c;
 	struct lump* anchor;
@@ -2120,7 +2246,7 @@ add_rcv_param_f(struct sip_msg* msg, char* str1, char* str2)
 	while(c) {
 		param = (char*)pkg_malloc(RECEIVED_LEN + 2 + uri.len);
 		if (!param) {
-			LOG(L_ERR, "add_rcv_param: No memory left\n");
+			ERR("No memory left\n");
 			return -1;
 		}
 		memcpy(param, RECEIVED, RECEIVED_LEN);
@@ -2130,12 +2256,12 @@ add_rcv_param_f(struct sip_msg* msg, char* str1, char* str2)
 
 		anchor = anchor_lump(msg, c->name.s + c->len - msg->buf, 0, 0);
 		if (anchor == NULL) {
-			LOG(L_ERR, "add_rcv_param: anchor_lump failed\n");
+			ERR("anchor_lump failed\n");
 			return -1;
 		}
 
 		if (insert_new_lump_after(anchor, param, RECEIVED_LEN + 1 + uri.len + 1, 0) == 0) {
-			LOG(L_ERR, "add_rcv_param: insert_new_lump_after failed\n");
+			ERR("insert_new_lump_after failed\n");
 			pkg_free(param);
 			return -1;
 		}
@@ -2148,356 +2274,372 @@ add_rcv_param_f(struct sip_msg* msg, char* str1, char* str2)
 	return 1;
 }
 
-
-/*
- * Create an AVP to be used by registrar with the source IP and port
- * of the REGISTER
- */
 static int
-fix_nated_register_f(struct sip_msg* msg, char* str1, char* str2)
+fixup_ping_contact(void **param, int param_no)
 {
-	str uri;
-	int_str val;
-	int_str rcv_avp;
+	int ret;
 
-	if (create_rcv_uri(&uri, msg) < 0) {
-		return -1;
+	if (param_no == 1) {
+		ret = fix_param(FPARAM_AVP, param);
+		if (ret <= 0) return ret;
+		return fix_param(FPARAM_STR, param);
 	}
-
-	val.s = uri;
-
-	rcv_avp.n=rcv_avp_no;
-	if (add_avp(AVP_VAL_STR, rcv_avp, val) < 0) {
-		LOG(L_ERR, "fix_nated_register: Error while creating AVP\n");
-		return -1;
-	}
-
-	return 1;
+	return 0;
 }
 
+static int
+ping_contact_f(struct sip_msg *msg, char *str1, char *str2)
+{
+	struct dest_info dst;
+	str s;
+	avp_t *avp;
+	avp_value_t val;
+
+	switch (((fparam_t *)str1)->type) {
+		case FPARAM_AVP:
+			if (!(avp = search_first_avp(((fparam_t *)str1)->v.avp.flags,
+			    ((fparam_t *)str1)->v.avp.name, &val, 0))) {
+				return -1;
+			} else {
+				if ((avp->flags & AVP_VAL_STR) == 0)
+					return -1;
+				s = val.s;
+			}
+			break;
+		case FPARAM_STRING:
+			s = ((fparam_t *)str1)->v.str;
+			break;
+	        default:
+        	        ERR("BUG: Invalid parameter value in ping_contact\n");
+                	return -1;
+        }
+	init_dest_info(&dst);
+	return natping_contact(s, &dst);
+}
 
 static int
 force_rtp_transcode2_f(struct sip_msg* msg, char* str1, char* str2)
 {
-	str body, oldport, oldip, newip;
-	char *newfancybody = malloc(600);
-	str codec;
-	str callid, from_tag, to_tag, tmp;
-	int create, len, port, asymmetric, flookup, argc, proxied, real;
-	int oidx, pf, force, node_idx;
-	char opts[16];
-	char *cp, *cp1;
-	char  *cpend, *next;
-	char **ap, *argv[10];
-	struct lump* anchor;
-	struct rtpp_node *node;
-	struct iovec v[16] = {
-		{NULL, 0},	/* command */
-		{NULL, 0},	/* options */
-		{" ", 1},	/* separator */
-		{NULL, 0},	/* callid */
-		{" ", 1},	/* separator */
-		{NULL, 7},	/* newip */
-		{" ", 1},	/* separator */
-		{NULL, 1},	/* oldport */
-		{" ", 1},	/* separator */
-		{NULL, 0},	/* from_tag */
-		{";", 1},	/* separator */
-		{NULL, 0},	/* medianum */
-		{" ", 1},	/* separator */
-		{NULL, 0},	/* to_tag */
-		{" ", 1},	/* Seperator */
-		{NULL, 0}	/* codec_info */
-	};
-	char *v1p, *v2p, *c1p, *c2p, *m1p, *m2p, *bodylimit;
-	char medianum_buf[20];
-	int medianum, media_multi;
-	str medianum_str, tmpstr1;
-	int c1p_altered;
+        str body, oldport, oldip, newip;
+        char *newfancybody = malloc(600);
+        str codec;
+        str callid, from_tag, to_tag, tmp;
+        int create, len, port, asymmetric, flookup, argc, proxied, real;
+        int oidx, pf, force, node_idx;
+        char opts[16];
+        char *cp, *cp1;
+        char  *cpend, *next;
+        char **ap, *argv[10];
+        struct lump* anchor;
+        struct rtpp_node *node;
+        struct iovec v[16] = {
+                {NULL, 0},      /* command */
+                {NULL, 0},      /* options */
+                {" ", 1},       /* separator */
+                {NULL, 0},      /* callid */
+                {" ", 1},       /* separator */
+                {NULL, 7},      /* newip */
+                {" ", 1},       /* separator */
+                {NULL, 1},      /* oldport */
+                {" ", 1},       /* separator */
+                {NULL, 0},      /* from_tag */
+                {";", 1},       /* separator */
+                {NULL, 0},      /* medianum */
+                {" ", 1},       /* separator */
+                {NULL, 0},      /* to_tag */
+                {" ", 1},       /* Seperator */
+                {NULL, 0}       /* codec_info */
+        };
+        char *v1p, *v2p, *c1p, *c2p, *m1p, *m2p, *bodylimit;
+        char medianum_buf[20];
+        int medianum, media_multi;
+        str medianum_str, tmpstr1;
+        int c1p_altered;
 
-	v[1].iov_base=opts;
-	asymmetric = flookup = force = real = port = 0;
-	oidx = 1;
-	node_idx = -1;
-	for (cp = str1; *cp != '\0'; cp++) {
-		switch (*cp) {
-		case ' ':
-		case '\t':
-			break;
+        v[1].iov_base=opts;
+        asymmetric = flookup = force = real = port = 0;
+        oidx = 1;
+        node_idx = -1;
+        for (cp = str1; *cp != '\0'; cp++) {
+                switch (*cp) {
+                case ' ':
+                case '\t':
+                        break;
 
                 case 'I':
-			str1 = "RTP/AVP 98\r\na=rtpmap:98 iLBC/8000\r\na=fmtp:98 mode=30\r\n";
-			codec.s = "98 4 mode=30";
+                        str1 = "RTP/AVP 98\r\na=rtpmap:98 iLBC/8000\r\na=fmtp:98 mode=30\r\n";
+                        codec.s = "98 4 mode=30";
                         codec.len = strlen(codec.s);
-			break;
+                        break;
                 case 'i':
-			str1 = "RTP/AVP 98\r\na=rtpmap:98 iLBC/8000\r\na=fmtp:98 mode=20\r\n";
-			codec.s = "98 4 mode=20";
+                        str1 = "RTP/AVP 98\r\na=rtpmap:98 iLBC/8000\r\na=fmtp:98 mode=20\r\n";
+                        codec.s = "98 4 mode=20";
                         codec.len = strlen(codec.s);
-			break;
-		case 'G':
-			str1= "RTP/AVP 3\r\na=rtpmap:3 GSM/8000\r\n";
-			codec.s = "3 3 *";
+                        break;
+                case 'G':
+                        str1= "RTP/AVP 3\r\na=rtpmap:3 GSM/8000\r\n";
+                        codec.s = "3 3 *";
                         codec.len = strlen(codec.s);
-			break;
-		case 'W':
-			str1 = "RTP/AVP 110\r\na=ptime:110 20\r\na=rtpmap:110 g7222/16000\r\n";
-			codec.s = "9 5 *";
+                        break;
+                case 'W':
+                        str1 = "RTP/AVP 110\r\na=ptime:110 20\r\na=rtpmap:110 g7222/16000\r\n";
+                        codec.s = "9 5 *";
                         codec.len = strlen(codec.s);
-			break;
-		case 'A':
-		        str1 = "RTP/AVP 8\r\na=rtpmap:0 PCMA/8000\r\n";
-		        codec.s = "8 2 *";
-		        codec.len = strlen(codec.s);
-		        break;
-		case 'S':
-		        str1 = "RTP/AVP 97\r\na=rtpmap:97 speex/8000\r\n";
-		        codec.s = "97 6 *";
-		        codec.len = strlen(codec.s);
-		        break;
-
-		case 'U':
-		default:
-			str1 = "RTP/AVP 0\r\na=rtpmap:0 PCMU/8000\r\n";
-			codec.s = "0 1 *";
+                        break;
+                case 'A':
+                        str1 = "RTP/AVP 8\r\na=rtpmap:0 PCMA/8000\r\n";
+                        codec.s = "8 2 *";
                         codec.len = strlen(codec.s);
-			break;
-		}
-	}
+                        break;
+                case 'S':
+                        str1 = "RTP/AVP 97\r\na=rtpmap:97 speex/8000\r\n";
+                        codec.s = "97 6 *";
+                        codec.len = strlen(codec.s);
+                        break;
 
-	if (msg->first_line.type == SIP_REQUEST &&
-	    msg->first_line.u.request.method_value == METHOD_INVITE) {
-		create = 1;
-	} else if (msg->first_line.type == SIP_REPLY) {
-		create = 0;
-	} else {
-		return -1;
-	}
-	/* extract_body will also parse all the headers in the message as
-	 * a side effect => don't move get_callid/get_to_tag in front of it
-	 * -- andrei */
+                case 'U':
+                default:
+                        str1 = "RTP/AVP 0\r\na=rtpmap:0 PCMU/8000\r\n";
+                        codec.s = "0 1 *";
+                        codec.len = strlen(codec.s);
+                        break;
+                }
+        }
 
-	if (extract_body(msg, &body) == -1) {
-		LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't extract body "
-		    "from the message\n");
-		return -1;
-	}
-	if (get_callid(msg, &callid) == -1 || callid.len == 0) {
-		LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't get Call-Id field\n");
-		return -1;
-	}
-	if (get_to_tag(msg, &to_tag) == -1) {
-		LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't get To tag\n");
-		return -1;
-	}
-	if (get_from_tag(msg, &from_tag) == -1 || from_tag.len == 0) {
-		LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't get From tag\n");
-		return -1;
-	}
-	if (flookup != 0) {
-		if (create == 0 || to_tag.len == 0)
-			return -1;
-		create = 0;
-		tmp = from_tag;
-		from_tag = to_tag;
-		to_tag = tmp;
-	}
-	proxied = 0;
-	for (cp = body.s; (len = body.s + body.len - cp) >= ANORTPPROXY_LEN;) {
-		cp1 = ser_memmem(cp, ANORTPPROXY, len, ANORTPPROXY_LEN);
-		if (cp1 == NULL)
-			break;
-		if (cp1[-1] == '\n' || cp1[-1] == '\r') {
-			proxied = 1;
-			break;
-		}
-		cp = cp1 + ANORTPPROXY_LEN;
-	}
-	
-	 anchor = del_lump(msg, msg->eoh - msg->buf + 1, body.len, 0);
+        if (msg->first_line.type == SIP_REQUEST &&
+            msg->first_line.u.request.method_value == METHOD_INVITE) {
+                create = 1;
+        } else if (msg->first_line.type == SIP_REPLY) {
+                create = 0;
+        } else {
+                return -1;
+        }
+        /* extract_body will also parse all the headers in the message as
+         * a side effect => don't move get_callid/get_to_tag in front of it
+         * -- andrei */
 
-	if (proxied != 0 && force == 0)
-		return -1;
-	/*
-	 * Parsing of SDP body.
-	 * It can contain a few session descriptions (each starts with
-	 * v-line), and each session may contain a few media descriptions
-	 * (each starts with m-line).
-	 * We have to change ports in m-lines, and also change IP addresses in
-	 * c-lines which can be placed either in session header (fallback for
-	 * all medias) or media description.
-	 * Ports should be allocated for any media. IPs all should be changed
-	 * to the same value (RTP proxy IP), so we can change all c-lines
-	 * unconditionally.
-	 */
-	bodylimit = body.s + body.len;
-	v1p = find_sdp_line(body.s, bodylimit, 'v');
-	if (v1p == NULL) {
-		LOG(L_ERR, "ERROR: force_rtp_transcode2_f: no sessions in SDP\n");
-		return -1;
-	}
+        if (extract_body(msg, &body) == -1) {
+                LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't extract body "
+                    "from the message\n");
+                return -1;
+        }
+        if (get_callid(msg, &callid) == -1 || callid.len == 0) {
+                LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't get Call-Id field\n");
+                return -1;
+        }
+        if (get_to_tag(msg, &to_tag) == -1) {
+                LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't get To tag\n");
+                return -1;
+        }
+        if (get_from_tag(msg, &from_tag) == -1 || from_tag.len == 0) {
+                LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't get From tag\n");
+                return -1;
+        }
+        if (flookup != 0) {
+                if (create == 0 || to_tag.len == 0)
+                        return -1;
+                create = 0;
+                tmp = from_tag;
+                from_tag = to_tag;
+                to_tag = tmp;
+        }
+        proxied = 0;
+        for (cp = body.s; (len = body.s + body.len - cp) >= ANORTPPROXY_LEN;) {
+                cp1 = ser_memmem(cp, ANORTPPROXY, len, ANORTPPROXY_LEN);
+                if (cp1 == NULL)
+                        break;
+                if (cp1[-1] == '\n' || cp1[-1] == '\r') {
+                        proxied = 1;
+                        break;
+                }
+                cp = cp1 + ANORTPPROXY_LEN;
+        }
 
+         anchor = del_lump(msg, msg->eoh - msg->buf + 1, body.len, 0);
 
-	v2p = find_next_sdp_line(v1p, bodylimit, 'v', bodylimit);
-	media_multi = (v2p != bodylimit);
-	v2p = v1p;
-
-	medianum = 0;
-	for(;;) {
-		/* Per-session iteration. */
-		v1p = v2p;
-		if (v1p == NULL || v1p >= bodylimit)
-			break; /* No sessions left */
-		v2p = find_next_sdp_line(v1p, bodylimit, 'v', bodylimit);
-		/* v2p is text limit for session parsing. */
-		m1p = find_sdp_line(v1p, v2p, 'm');
-		/* Have this session media description? */
-
-		if (m1p == NULL) {
-			LOG(L_ERR, "ERROR: force_rtp_transcode2_f: no m= in session\n");
-			return -1;
-		}
-		/*
-		 * Find c1p only between session begin and first media.
-		 * c1p will give common c= for all medias.
-		 */
-		c1p = find_sdp_line(v1p, m1p, 'c');
-		c1p_altered = 0;
-		
-		/* Have session. Iterate media descriptions in session */
-		m2p = m1p;
-		for (;;) {
-			m1p = m2p;
-			if (m1p == NULL || m1p >= v2p)
-				break;
-			m2p = find_next_sdp_line(m1p, v2p, 'm', v2p);
-			/* c2p will point to per-media "c=" */
-			c2p = find_sdp_line(m1p, m2p, 'c');
-			/* Extract address and port */
-			tmpstr1.s = c2p ? c2p : c1p;
-			if (tmpstr1.s == NULL) {
-				/* No "c=" */
-				LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't"
-				    " find media IP in the message\n");
-				return -1;
-			}
-			tmpstr1.len = v2p - tmpstr1.s; /* limit is session limit text */
-			if (extract_mediaip(&tmpstr1, &oldip, &pf) == -1) {
-				LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't"
-				    " extract media IP from the message\n");
-				return -1;
-			}
-			tmpstr1.s = m1p;
-			tmpstr1.len = m2p - m1p;
-			if (extract_mediaport(&tmpstr1, &oldport) == -1) {
-				LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't"
-				    " extract media port from the message\n");
-				return -1;
-			}
-			++medianum;
-			if (asymmetric != 0 || real != 0) {
-				newip = oldip;
-			} else {
-				newip.s = ip_addr2a(&msg->rcv.src_ip);
-				newip.len = strlen(newip.s);
-			}
-			/* XXX must compare address families in all addresses */
-			if (pf == AF_INET6) {
-				opts[oidx] = '6';
-				oidx++;
-			}
-			snprintf(medianum_buf, sizeof medianum_buf, "%d", medianum);
-			medianum_str.s = medianum_buf;
-			medianum_str.len = strlen(medianum_buf);
-			opts[0] = (create == 0) ? 't' : 'T';
-			v[1].iov_len = oidx;
-			STR2IOVEC(callid, v[3]);
-			STR2IOVEC(newip, v[5]);
-			STR2IOVEC(oldport, v[7]);
-			STR2IOVEC(from_tag, v[9]);
-			if (1 || media_multi) /* XXX netch: can't choose now*/
-			{
-				STR2IOVEC(medianum_str, v[11]);
-			} else {
-				v[10].iov_len = v[11].iov_len = 0;
-			}
-			STR2IOVEC(to_tag, v[13]);
-			STR2IOVEC(codec, v[15]);
-			do {
-				node = select_rtpp_node(callid, 1, node_idx);
-				if (!node) {
-					LOG(L_ERR, "ERROR: force_rtp_transcode2_f: no available proxies\n");
-					return -1;
-				}
-				cp = send_rtpp_command(node, v, (to_tag.len > 0) ? 16 : 16); 	/* XXX Fix me at some time */
-												/* It's here to test */
-			} while (cp == NULL);
-			LOG(L_DBG, "force_rtp_transcode2_f: proxy reply: %s\n", cp);
-			/* Parse proxy reply to <argc,argv> */
-			argc = 0;
-			memset(argv, 0, sizeof(argv));
-			cpend=cp+strlen(cp);
-			next=eat_token_end(cp, cpend);
-			for (ap = argv; cp<cpend; cp=next+1, next=eat_token_end(cp, cpend)){
-				*next=0;
-				if (*cp != '\0') {
-					*ap=cp;
-					argc++;
-					if ((char*)++ap >= ((char*)argv+sizeof(argv)))
-						break;
-				}
-			}
-			if (argc < 1) {
-				LOG(L_ERR, "force_rtp_transcode2_f: no reply from rtp proxy\n");
-				return -1;
-			}
-			if (argv[0][0] == 'E') {
-			  port = atoi((char*)argv[0] + 1);
-			  if (port == 15) 
-			    LOG(L_ERR, "force_rtp_transcode2: rtp proxy encountered error"
-				" while initializing codec\n");
-			  else 
-			    LOG(L_ERR, "force_rtp_transcode2: rtp proxy encountered error: %u\n", port);
-			  return -1;
-			}
-
-			port = atoi(argv[0]);
-			if (port <= 0 || port > 65535) {
-				LOG(L_ERR, "force_rtp_transcode2_f: incorrect port in reply from rtp proxy\n");
-				return -1;
-			}
-
-		} /* Iterate medias in session */
-	} /* Iterate sessions */
+        if (proxied != 0 && force == 0)
+                return -1;
+        /*
+         * Parsing of SDP body.
+         * It can contain a few session descriptions (each starts with
+         * v-line), and each session may contain a few media descriptions
+         * (each starts with m-line).
+         * We have to change ports in m-lines, and also change IP addresses in
+         * c-lines which can be placed either in session header (fallback for
+         * all medias) or media description.
+         * Ports should be allocated for any media. IPs all should be changed
+         * to the same value (RTP proxy IP), so we can change all c-lines
+         * unconditionally.
+         */
+        bodylimit = body.s + body.len;
+        v1p = find_sdp_line(body.s, bodylimit, 'v');
+        if (v1p == NULL) {
+                LOG(L_ERR, "ERROR: force_rtp_transcode2_f: no sessions in SDP\n");
+                return -1;
+        }
 
 
-	if (proxied == 0) {
- 	        sprintf(newfancybody, "v=0\r\no=- 1383514984 1383515221 IN IP4 %s\r\n"
-			"s=SER transcoder\r\nc=IN IP4 %s\r\n"
-			"t=0 0\r\nm=audio %i %s",str2,str2,port,str1);	
-		cp = pkg_malloc(strlen(newfancybody) * sizeof(char));
-		if (cp == NULL) {
-			LOG(L_ERR, "ERROR: force_rtp_proxy2: out of memory\n");
-			return -1;
-		}
+        v2p = find_next_sdp_line(v1p, bodylimit, 'v', bodylimit);
+        media_multi = (v2p != bodylimit);
+        v2p = v1p;
 
-		anchor = anchor_lump(msg, body.s + body.len - msg->buf, 0, 0);
-		if (anchor == NULL) {
-			LOG(L_ERR, "ERROR: force_rtp_transcode2_f: anchor_lump failed\n");
-			pkg_free(cp);
-			return -1;
-		}
+        medianum = 0;
+        for(;;) {
+                /* Per-session iteration. */
+                v1p = v2p;
+                if (v1p == NULL || v1p >= bodylimit)
+                        break; /* No sessions left */
+                v2p = find_next_sdp_line(v1p, bodylimit, 'v', bodylimit);
+                /* v2p is text limit for session parsing. */
+                m1p = find_sdp_line(v1p, v2p, 'm');
+                /* Have this session media description? */
+
+                if (m1p == NULL) {
+                        LOG(L_ERR, "ERROR: force_rtp_transcode2_f: no m= in session\n");
+                        return -1;
+                }
+                /*
+                 * Find c1p only between session begin and first media.
+                 * c1p will give common c= for all medias.
+                 */
+                c1p = find_sdp_line(v1p, m1p, 'c');
+                c1p_altered = 0;
+
+                /* Have session. Iterate media descriptions in session */
+                m2p = m1p;
+                for (;;) {
+                        m1p = m2p;
+                        if (m1p == NULL || m1p >= v2p)
+                                break;
+                        m2p = find_next_sdp_line(m1p, v2p, 'm', v2p);
+                        /* c2p will point to per-media "c=" */
+                        c2p = find_sdp_line(m1p, m2p, 'c');
+                        /* Extract address and port */
+                        tmpstr1.s = c2p ? c2p : c1p;
+                        if (tmpstr1.s == NULL) {
+                                /* No "c=" */
+                                LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't"
+                                    " find media IP in the message\n");
+                                return -1;
+                        }
+                        tmpstr1.len = v2p - tmpstr1.s; /* limit is session limit text */
+                        if (extract_mediaip(&tmpstr1, &oldip, &pf) == -1) {
+                                LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't"
+                                    " extract media IP from the message\n");
+                                return -1;
+                        }
+                        tmpstr1.s = m1p;
+                        tmpstr1.len = m2p - m1p;
+                        if (extract_mediaport(&tmpstr1, &oldport) == -1) {
+                                LOG(L_ERR, "ERROR: force_rtp_transcode2_f: can't"
+                                    " extract media port from the message\n");
+                                return -1;
+                        }
+                        ++medianum;
+                        if (asymmetric != 0 || real != 0) {
+                                newip = oldip;
+                        } else {
+                                newip.s = ip_addr2a(&msg->rcv.src_ip);
+                                newip.len = strlen(newip.s);
+                        }
+                        /* XXX must compare address families in all addresses */
+                        if (pf == AF_INET6) {
+                                opts[oidx] = '6';
+                                oidx++;
+                        }
+                        snprintf(medianum_buf, sizeof medianum_buf, "%d", medianum);
+                        medianum_str.s = medianum_buf;
+                        medianum_str.len = strlen(medianum_buf);
+                        opts[0] = (create == 0) ? 't' : 'T';
+                        v[1].iov_len = oidx;
+                        STR2IOVEC(callid, v[3]);
+                        STR2IOVEC(newip, v[5]);
+                        STR2IOVEC(oldport, v[7]);
+                        STR2IOVEC(from_tag, v[9]);
+                        if (1 || media_multi) /* XXX netch: can't choose now*/
+                        {
+                                STR2IOVEC(medianum_str, v[11]);
+                        } else {
+                                v[10].iov_len = v[11].iov_len = 0;
+                        }
+                        STR2IOVEC(to_tag, v[13]);
+                        STR2IOVEC(codec, v[15]);
+                        do {
+                                node = select_rtpp_node(callid, 1, node_idx);
+                                if (!node) {
+                                        LOG(L_ERR, "ERROR: force_rtp_transcode2_f: no available proxies\n");
+                                        return -1;
+                                }
+                                cp = send_rtpp_command(node, v, (to_tag.len > 0) ? 16 : 16);    /* XXX Fix me at some time */
+                                                                                                /* It's here to test */
+                        } while (cp == NULL);
+                        LOG(L_DBG, "force_rtp_transcode2_f: proxy reply: %s\n", cp);
+                        /* Parse proxy reply to <argc,argv> */
+                        argc = 0;
+                        memset(argv, 0, sizeof(argv));
+                        cpend=cp+strlen(cp);
+                        next=eat_token_end(cp, cpend);
+                        for (ap = argv; cp<cpend; cp=next+1, next=eat_token_end(cp, cpend)){
+                                *next=0;
+                                if (*cp != '\0') {
+                                        *ap=cp;
+                                        argc++;
+                                        if ((char*)++ap >= ((char*)argv+sizeof(argv)))
+                                                break;
+                                }
+                        }
+                        if (argc < 1) {
+                                LOG(L_ERR, "force_rtp_transcode2_f: no reply from rtp proxy\n");
+                                return -1;
+                        }
+                        if (argv[0][0] == 'E') {
+                          port = atoi((char*)argv[0] + 1);
+                          if (port == 15)
+                            LOG(L_ERR, "force_rtp_transcode2: rtp proxy encountered error"
+                                " while initializing codec\n");
+                          else
+                            LOG(L_ERR, "force_rtp_transcode2: rtp proxy encountered error: %u\n", port);
+                          return -1;
+                        }
+
+                        port = atoi(argv[0]);
+                        if (port <= 0 || port > 65535) {
+                                LOG(L_ERR, "force_rtp_transcode2_f: incorrect port in reply from rtp proxy\n");
+                                return -1;
+                        }
+
+                } /* Iterate medias in session */
+        } /* Iterate sessions */
 
 
-		memcpy(cp, newfancybody, strlen(newfancybody));
-		if (insert_new_lump_after(anchor, cp, strlen(newfancybody), 0) == NULL) {
-			LOG(L_ERR, "ERROR: force_rtp_proxy2: insert_new_lump_after failed\n");
-			pkg_free(cp);
-			return -1;
-		}
-		
-	}
+        if (proxied == 0) {
+                sprintf(newfancybody, "v=0\r\no=- 1383514984 1383515221 IN IP4 %s\r\n"
+                        "s=SER transcoder\r\nc=IN IP4 %s\r\n"
+                        "t=0 0\r\nm=audio %i %s",str2,str2,port,str1);
+                cp = pkg_malloc(strlen(newfancybody) * sizeof(char));
+                if (cp == NULL) {
+                        LOG(L_ERR, "ERROR: force_rtp_proxy2: out of memory\n");
+                        return -1;
+                }
 
-	//LOG(L_ERR, "Atle2 er her \r\n %s\n", msg->buf);
-	return 1;
+                anchor = anchor_lump(msg, body.s + body.len - msg->buf, 0, 0);
+                if (anchor == NULL) {
+                        LOG(L_ERR, "ERROR: force_rtp_transcode2_f: anchor_lump failed\n");
+                        pkg_free(cp);
+                        return -1;
+                }
+
+
+                memcpy(cp, newfancybody, strlen(newfancybody));
+                if (insert_new_lump_after(anchor, cp, strlen(newfancybody), 0) == NULL) {
+                        LOG(L_ERR, "ERROR: force_rtp_proxy2: insert_new_lump_after failed\n");
+                        pkg_free(cp);
+                        return -1;
+                }
+
+        }
+
+        //LOG(L_ERR, "Atle2 er her \r\n %s\n", msg->buf);
+        return 1;
 }
+
